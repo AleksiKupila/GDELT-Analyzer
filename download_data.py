@@ -2,7 +2,7 @@ import requests, os
 from datetime import datetime, timedelta
 
 MASTER_LIST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
-TIME_LIMIT = 8
+TIME_LIMIT = 4
 
 def get_file_list():
 
@@ -43,9 +43,10 @@ def download_files(file_list):
                 for chunk in r_file.iter_content(chunk_size=8192):
                     f.write(chunk)
 
+'''
 if __name__=="__main__":
     file_list = get_file_list()
     if file_list:
         download_files(file_list)
-
+'''
 #def download_files(url_list, ):
