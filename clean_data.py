@@ -1,6 +1,12 @@
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, LongType
+import glob
+import os
+import zipfile
 
-def ingest_data(spark):
+from utils.file_utils import unzip_files
+from pyspark.sql.types import *
+from pyspark.sql.functions import col, to_date
+
+def ingest_data(spark, data_files):
 
     schema = StructType([
         StructField("GLOBALEVENTID", LongType(), True),
@@ -73,11 +79,47 @@ def ingest_data(spark):
         StructField("DATEADDED", LongType(), True),
         StructField("SOURCEURL", StringType(), True),
     ])
+
     raw_df = spark.read \
         .option("delimiter", "\t") \
         .option("header", "false") \
         .option("inferSchema", "false") \
         .option("mode", "PERMISSIVE") \
-        .csv("data/raw_zips/*.zip", schema=schema)
+        .csv(data_files, schema=schema)
     
     print(f"Total rows loaded: {raw_df.count()}")
+    return raw_df
+
+
+def data_cleaner(df):
+
+    print("Cleaning ingested data...")
+    clean_df = df \
+    .withColumn("event_date", to_date(col("SQLDATE").cast("string"), "yyyyMMdd")) \
+    .withColumn("year_month", col("MonthYear").cast("string")) \
+    .withColumn("goldstein_scale", col("GoldsteinScale").cast("float")) \
+    .withColumn("avg_tone", col("AvgTone").cast("float")) \
+    .withColumn("num_mentions", col("NumMentions").cast("int")) \
+    .withColumn("num_articles", col("NumArticles").cast("int")) \
+    .withColumn("is_root_event", col("IsRootEvent").cast("boolean")) \
+    .withColumn("date_added", to_date(col("DATEADDED").cast("string").substr(1,8), "yyyyMMdd")) \
+    .select(
+
+        "GLOBALEVENTID",
+        "event_date",
+        "year_month",
+        "Actor1Name", "Actor1CountryCode", "Actor1Type1Code",
+        "Actor2Name", "Actor2CountryCode",
+        "EventCode", "EventBaseCode", "EventRootCode",
+        "QuadClass", "goldstein_scale", "avg_tone",
+        "num_mentions", "num_articles",
+        "ActionGeo_FullName", "ActionGeo_CountryCode",
+        "ActionGeo_Lat", "ActionGeo_Long",
+        "SOURCEURL"
+    ) \
+    .filter(col("event_date").isNotNull())
+
+    print(f"Total rows cleaned: {clean_df.count()}")
+    return(clean_df)
+    
+
