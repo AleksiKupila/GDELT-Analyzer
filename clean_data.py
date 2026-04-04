@@ -174,4 +174,19 @@ def clean_extracted(df):
     print(f"Total rows cleaned: {clean_df.count()}")
     return(clean_df)
     
+def cameo_df(spark, f):
+    lines = f.text.splitlines()
+    del lines[0]
+    data = []
 
+    for line in lines:
+        parts = line.split()
+        data.append((parts[0], " ".join(parts[1:])))
+
+    schema = StructType([
+            StructField("event_code", StringType(), True),
+            StructField("description", StringType(), True)
+    ])
+    df = spark.createDataFrame(data, schema)
+    print(f"Cameo dataframe succesfully created! Total rows loaded: {df.count()}")
+    return df

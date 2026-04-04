@@ -1,20 +1,24 @@
 import os
 from pyspark.sql import SparkSession
-from download_data import get_file_list, download_files
+from download_data import get_file_list, download_files, get_event_codes
 from pyspark.sql.functions import col, to_date, lit
 from utils.file_utils import clear_data, unzip_files
-from clean_data import ingest_gkg_data, clean_extracted, ingest_event_data
+from clean_data import ingest_gkg_data, clean_extracted, ingest_event_data, cameo_df
 
 DATA_DIR = "data"
 ZIP_DIR = "data/raw_zips"
 EXTRACT_DIR = "data/extracted"
 
+spark = SparkSession.builder.appName("GDELT-Analyzer").getOrCreate()
+
 if os.path.isdir(DATA_DIR):
     clear_data(DATA_DIR)
 
 def main():
-    spark = SparkSession.builder.appName("GDELT-Analyzer").getOrCreate()
+    event_codes = get_event_codes()
+    codes_df = cameo_df(spark, event_codes)
     url_list = get_file_list("export")
+
     if url_list:
         download_files(url_list)
 

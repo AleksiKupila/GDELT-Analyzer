@@ -2,6 +2,7 @@ import requests, os
 from datetime import datetime, timedelta
 
 MASTER_LIST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
+EVENT_CODE_URL = "https://www.gdeltproject.org/data/lookups/CAMEO.eventcodes.txt"
 TIME_LIMIT = 4
 
 def get_file_list(list_type):
@@ -51,10 +52,14 @@ def download_files(file_list):
                 for chunk in r_file.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-'''
-if __name__=="__main__":
-    file_list = get_file_list()
-    if file_list:
-        download_files(file_list)
-'''
-#def download_files(url_list, ):
+def get_event_codes():
+     
+    try:
+        print("Downloading the GDELT CAMEO event codes...")
+        r = requests.get(EVENT_CODE_URL)
+        print("Event codes succesfully downloaded!")
+        return r
+    except Exception as e:
+        print(f"Failed retrieving master URL list: {e}")
+        return None
+
