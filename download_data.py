@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 MASTER_LIST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
 TIME_LIMIT = 4
 
-def get_file_list():
+def get_file_list(list_type):
 
     try:
         print("Downloading the GDELT master URL list...")
@@ -19,15 +19,23 @@ def get_file_list():
     print(f"Files starting from: {time_range}")
     print(f"Current time: {datetime.now()}")
 
+    if list_type == "gkg":
+        url_end = ".gkg.csv.zip"
+    else:
+        url_end = ".export.CSV.zip"
+
     for line in lines:
-        if ".export.CSV.zip" in line:
+        if url_end in line:
             parts = line.split()
-            url = parts[2]
-            timestamp_str = url.split('/')[-1].split('.')[0]
-            file_time = datetime.strptime(timestamp_str, "%Y%m%d%H%M%S")
-            
-            if file_time > time_range:      
-                export_list.append(url)
+            if len(parts) < 2:
+                pass
+            else:
+                url = parts[2]
+                timestamp_str = url.split('/')[-1].split('.')[0]
+                file_time = datetime.strptime(timestamp_str, "%Y%m%d%H%M%S")
+                
+                if file_time > time_range:      
+                    export_list.append(url)
 
     print(f"Succesfully created the file list, total {len(export_list)} URL:s")
     return(export_list)
