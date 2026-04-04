@@ -3,7 +3,8 @@ from pyspark.sql import SparkSession
 from download_data import get_file_list, download_files, get_event_codes
 from pyspark.sql.functions import col, to_date, lit
 from utils.file_utils import clear_data, unzip_files
-from clean_data import ingest_gkg_data, clean_extracted, ingest_event_data, cameo_df
+from ingest_clean import ingest_gkg_data, clean_event_data, ingest_event_data, ingest_cameo_data
+from join_data import join_cameo_df
 
 DATA_DIR = "data"
 ZIP_DIR = "data/raw_zips"
@@ -16,7 +17,6 @@ if os.path.isdir(DATA_DIR):
 
 def main():
     event_codes = get_event_codes()
-    codes_df = cameo_df(spark, event_codes)
     url_list = get_file_list("export")
 
     if url_list:
@@ -29,13 +29,16 @@ def main():
 
     #full_df = ingest_gkg_data(spark, extracted)
     event_df = ingest_event_data(spark, extracted)
-    clean_df = clean_extracted(event_df)
-    """
-    full_df \
-    .orderBy(col("DATE").desc()) \
-    .select("DATE", "SOURCECOMMONNAME", "V1THEMES", "V1LOCATIONS") \
-    .show(10)
-    """
+    clean_df = clean_event_data(event_df)
+    event_codes_df = ingest_cameo_data(spark, event_codes)
+
+    df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
+
+    df_with_code_descriptions \
+    .orderBy(col("num_mentions").desc()) \
+    .select("event_date", "num_mentions", "Actor1Name", "Actor2Name", "ActionGeo_FullName", "EventDescription") \
+    .show(10, truncate=False)
+
     
 if __name__=="__main__":
     main()

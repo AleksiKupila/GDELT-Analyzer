@@ -143,7 +143,7 @@ def ingest_event_data(spark, data_files):
     print(f"Total rows loaded: {raw_df.count()}")
     return raw_df
 
-def clean_extracted(df):
+def clean_event_data(df):
 
     print("Cleaning ingested data...")
     clean_df = df \
@@ -174,7 +174,7 @@ def clean_extracted(df):
     print(f"Total rows cleaned: {clean_df.count()}")
     return(clean_df)
     
-def cameo_df(spark, f):
+def ingest_cameo_data(spark, f):
     lines = f.text.splitlines()
     del lines[0]
     data = []
@@ -184,8 +184,8 @@ def cameo_df(spark, f):
         data.append((parts[0], " ".join(parts[1:])))
 
     schema = StructType([
-            StructField("event_code", StringType(), True),
-            StructField("description", StringType(), True)
+            StructField("EventCode", StringType(), True),
+            StructField("EventDescription", StringType(), True)
     ])
     df = spark.createDataFrame(data, schema)
     print(f"Cameo dataframe succesfully created! Total rows loaded: {df.count()}")
