@@ -1,11 +1,10 @@
 import os
 from pyspark.sql import SparkSession
 from download_data import get_file_list, download_files, get_event_codes
-from pyspark.sql.functions import col, to_date, lit
 from utils.file_utils import clear_data, unzip_files
 from ingest_clean import ingest_gkg_data, clean_event_data, ingest_event_data, ingest_cameo_data
-from join_data import join_cameo_df
-from mongodb import Mongo_client
+from analysis import join_cameo_df, top_events, separate_events
+from mongodb import write_data
 from pymongo import MongoClient
 
 DATA_DIR = "data"
@@ -33,6 +32,7 @@ except Exception as e:
 db = mongo_client["gdelt"]
 print("Dropping old collections...")
 db["events"].drop()
+db["separate_events"].drop()
 
 if os.path.isdir(DATA_DIR):
     clear_data(DATA_DIR)
@@ -54,23 +54,14 @@ def main():
     event_codes_df = ingest_cameo_data(spark, event_codes)
 
     df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
+    write_data(df_with_code_descriptions, "events")
 
-    try:             
-        df_with_code_descriptions.write \
-            .format("mongodb") \
-            .mode("append") \
-            .option("database", "gdelt") \
-            .option("collection", "events") \
-            .save()
-        print("Succesfully saved data into MongoDB!")
+    top_events_df = top_events(df_with_code_descriptions)
+    top_events_df.show()
 
-    except Exception as e:
-        print(f"Failed writing data into MongoDB: {e}")
+    separate_events_df = separate_events(df_with_code_descriptions)
+    separate_events_df.show(20)
+    write_data(separate_events_df, "separate_events")
 
-    df_with_code_descriptions \
-    .orderBy(col("num_mentions").desc()) \
-    .select("event_date", "num_mentions", "Actor1Name", "Actor2Name", "ActionGeo_FullName", "EventDescription") \
-    .show(10, truncate=False)
-    
 if __name__=="__main__":
     main()

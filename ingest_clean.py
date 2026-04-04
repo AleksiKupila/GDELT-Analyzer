@@ -1,5 +1,5 @@
 from pyspark.sql.types import *
-from pyspark.sql.functions import col, to_date
+from pyspark.sql.functions import col, to_date, window
 
 def ingest_gkg_data(spark, data_files):
 
@@ -153,23 +153,24 @@ def clean_event_data(df):
     .withColumn("avg_tone", col("AvgTone").cast("float")) \
     .withColumn("num_mentions", col("NumMentions").cast("int")) \
     .withColumn("num_articles", col("NumArticles").cast("int")) \
+    .withColumn("num_sources", col("NumSources").cast("int")) \
     .withColumn("is_root_event", col("IsRootEvent").cast("boolean")) \
     .withColumn("date_added", to_date(col("DATEADDED").cast("string").substr(1,8), "yyyyMMdd")) \
     .select(
 
         "GLOBALEVENTID",
-        "event_date",
-        "year_month",
+        "event_date", "year_month",
         "Actor1Name", "Actor1CountryCode", "Actor1Type1Code",
         "Actor2Name", "Actor2CountryCode",
         "EventCode", "EventBaseCode", "EventRootCode",
         "QuadClass", "goldstein_scale", "avg_tone",
-        "num_mentions", "num_articles",
+        "num_mentions", "num_articles", "num_sources",
         "ActionGeo_FullName", "ActionGeo_CountryCode",
         "ActionGeo_Lat", "ActionGeo_Long",
         "SOURCEURL"
     ) \
-    .filter(col("event_date").isNotNull())
+    .filter(col("event_date").isNotNull()) \
+    .orderBy(col("num_articles").asc()) \
 
     print(f"Total rows cleaned: {clean_df.count()}")
     return(clean_df)

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 MASTER_LIST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
 EVENT_CODE_URL = "https://www.gdeltproject.org/data/lookups/CAMEO.eventcodes.txt"
-TIME_LIMIT = 4
+TIME_LIMIT = 10
 
 def get_file_list(list_type):
 
