@@ -1,4 +1,4 @@
-from pyspark.sql.functions import col, avg, count, sum, first, max, mode, collect_list
+from pyspark.sql.functions import *
 
 def join_cameo_df(cameo_df, event_df):
     return event_df.join(cameo_df, on="EventCode", how="inner")
@@ -13,6 +13,7 @@ def separate_events(df):
             "ActionGeo_CountryCode",
             "event_date",
             "QuadClass",
+            "EventBaseCode",
             "EventRootCode" \
         ).agg( 
             count("*").alias("total_events"),
@@ -27,12 +28,17 @@ def separate_events(df):
             mode("ActionGeo_Lat").alias("lat_coordinates"),
             mode("ActionGeo_Long").alias("long_coordinates"),
             mode("EventDescription").alias("event_description"),
-            collect_list("SOURCEURL").alias("all_urls")
+            array_distinct(collect_list("SOURCEURL")).alias("all_urls")
         ).filter("total_sources > 30") \
-        .filter(col("EventRootCode").isin(meaningful_events)) \
         .filter(col("ActionGeo_CountryCode").isNotNull()) \
+        .filter(col("EventRootCode").isin(meaningful_events)) \
         .orderBy(col("avg_goldstein_scale").asc())
-    
+    '''
+    separate_events = separate_events.withColumn(
+        "dissonance_score",
+        abs(col("avg_goldstein_scale") - (col("average_tone") / lit(10)))
+    )
+    '''
     return separate_events
     
 
