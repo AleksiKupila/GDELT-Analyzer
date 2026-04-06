@@ -45,7 +45,7 @@ def separate_events(df):
                 ),
                 1, 20
             ).alias("sample_urls")
-        ).filter("total_sources > 30") \
+        ).filter("total_sources > 20") \
         .filter(col("ActionGeo_CountryCode").isNotNull()) \
         .filter(col("EventRootCode").isin(MEANINGFUL_EVENTS)) \
         .orderBy(col("total_articles").desc()) \
@@ -67,4 +67,13 @@ def impactful_events(df):
         col("avg_goldstein_scale") * col("total_articles")) \
         .orderBy(col("impact_score").asc()) \
         .limit(15)
+    return df
+
+def top_events(df):
+    df = df \
+        .filter(col("lat").isNotNull()) \
+        .filter(col("lon").isNotNull()) \
+        .orderBy(col("num_articles").desc()) \
+        .limit(2000)
+        
     return df

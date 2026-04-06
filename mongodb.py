@@ -7,7 +7,7 @@ def write_data(df, collection):
             .option("database", "gdelt") \
             .option("collection", f"{collection}") \
             .save()
-        print("Succesfully saved data into MongoDB!")
+        print(f"Succesfully saved data into MongoDB, collection {collection}")
 
     except Exception as e:
         print(f"Failed writing data into MongoDB: {e}")

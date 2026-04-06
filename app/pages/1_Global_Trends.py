@@ -9,7 +9,7 @@ def get_mongodb_client():
     # Standard MongoDB URI
     return MongoClient("mongodb://localhost:27017/")
 
-def get_ui_data(collection_name, limit=100):
+def get_ui_data(collection_name, limit=1000):
     client = get_mongodb_client()
     db = client["gdelt"]
     collection = db[collection_name]
@@ -25,19 +25,16 @@ def get_ui_data(collection_name, limit=100):
         
     return df
 
-all_events_df = get_ui_data("events")
-top_impact_locations = get_ui_data("top_impact_event_locations")
+top_events_df = get_ui_data("top_events")
 
-st.subheader("Events with largest impact worldwide")
-st.write(all_events_df)
-
-st.subheader("Heatmap of most reported events worldwide")
+st.subheader("Most reported events worldwide")
+st.write(top_events_df)
 
 layer = pdk.Layer(
     "HeatmapLayer",
-    data=all_events_df,
+    data=top_events_df,
     get_position="[lon, lat]",
-    threshold=0.1,
+    threshold=0.2,
 )
 
 st.pydeck_chart(pdk.Deck(
@@ -45,5 +42,3 @@ st.pydeck_chart(pdk.Deck(
     layers=[layer],
     initial_view_state=pdk.ViewState(latitude=20, longitude=0, zoom=1, pitch=50),
 ))
-
-st.map(all_events_df)

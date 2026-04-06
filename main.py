@@ -35,7 +35,7 @@ db["events"].drop()
 db["separate_events"].drop()
 db["top_negative_events"].drop()
 db["top_impact_events"].drop()
-db["top_impact_event_locations"].drop()
+db["top_events"].drop()
 
 if os.path.isdir(DATA_DIR):
     clear_data(DATA_DIR)
@@ -59,7 +59,11 @@ def main():
     # Join GDELT CAMEO codes to the DF
     df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
     write_data(df_with_code_descriptions, "events")
-    '''
+
+    # Top events worldwide by article count
+    top_events_df = top_events(df_with_code_descriptions)
+    write_data(top_events_df, "top_events")
+
     # DF that separates events by location and topic
     separate_events_df = separate_events(df_with_code_descriptions)
     write_data(separate_events_df, "separate_events")
@@ -70,9 +74,7 @@ def main():
 
     # Events with most theoretical impact
     top_impact_events_df = impactful_events(separate_events_df)
-    top_impact_locations = event_locations(top_impact_events_df)
     write_data(top_impact_events_df, "top_impact_events")
-    write_data(top_impact_locations, "top_impact_event_locations")
-'''
+
 if __name__=="__main__":
     main()
