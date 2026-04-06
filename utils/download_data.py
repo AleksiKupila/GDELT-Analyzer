@@ -1,22 +1,18 @@
 import requests, os
 from datetime import datetime, timedelta
 
-MASTER_LIST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
-EVENT_CODE_URL = "https://www.gdeltproject.org/data/lookups/CAMEO.eventcodes.txt"
-TIME_LIMIT = 8
-
-def get_file_list(list_type):
+def get_file_list(list_type, master_list_url, time_limit):
 
     try:
         print("Downloading the GDELT master URL list...")
-        r = requests.get(MASTER_LIST_URL)
+        r = requests.get(master_list_url)
     except Exception as e:
         print(f"Failed retrieving master URL list: {e}")
         return None
     
     lines = r.text.splitlines()
     export_list = []
-    time_range = datetime.now() - timedelta(hours=TIME_LIMIT + 3)
+    time_range = datetime.now() - timedelta(hours=time_limit + 3)
     print(f"Files starting from: {time_range}")
     print(f"Current time: {datetime.now()}")
 
@@ -53,11 +49,11 @@ def download_files(file_list):
                     f.write(chunk)
     print("")
 
-def get_event_codes():
+def get_event_codes(event_code_url):
      
     try:
         print("Downloading the GDELT CAMEO event codes...")
-        r = requests.get(EVENT_CODE_URL)
+        r = requests.get(event_code_url)
         print("Event codes succesfully downloaded!")
         return r
     except Exception as e:

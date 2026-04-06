@@ -7,8 +7,15 @@ def join_cameo_df(cameo_df, event_df):
     return event_df.join(cameo_df, on="EventCode", how="inner")
 
 def separate_events(df):
-
+    '''
+    Function that attempts to group events by country, date, quad class and event codes.
+    Includes sample URLs for each event for later AI analysis
+    Does not count events with vague root codes
+    Sorts events by article count
+    '''
     separate_events = df \
+        .filter(col("ActionGeo_CountryCode").isNotNull()) \
+        .filter(col("EventRootCode").isin(MEANINGFUL_EVENTS)) \
         .groupBy(
             "ActionGeo_CountryCode",
             "event_date",
@@ -46,8 +53,6 @@ def separate_events(df):
                 1, 20
             ).alias("sample_urls")
         ).filter("total_sources > 20") \
-        .filter(col("ActionGeo_CountryCode").isNotNull()) \
-        .filter(col("EventRootCode").isin(MEANINGFUL_EVENTS)) \
         .orderBy(col("total_articles").desc()) \
 
     return separate_events
@@ -70,10 +75,29 @@ def impactful_events(df):
     return df
 
 def top_events(df):
+    '''
+    Returns top 2000 events by article count
+    Filters out events with null coordinate values
+    '''
     df = df \
         .filter(col("lat").isNotNull()) \
         .filter(col("lon").isNotNull()) \
         .orderBy(col("num_articles").desc()) \
         .limit(2000)
         
+    return df
+
+def events_by_country(df):
+    '''
+    Groups events by country, aggregates total events
+    Returns country code and total event count for each country present in the dataset
+    '''
+    df = df \
+        .filter(col("ActionGeo_CountryCode").isNotNull()) \
+        .groupBy("ActionGeo_CountryCode") \
+        .agg(count("*").alias("total_events")) \
+        .select(
+            "ActionGeo_CountryCode",
+            "total_events"
+        ).orderBy(col("total_events").desc())
     return df

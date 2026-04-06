@@ -60,6 +60,9 @@ def ingest_gkg_data(spark, data_files):
     return df
 
 def ingest_event_data(spark, data_files):
+    '''
+    Spark ingestion function for the GDELT event dataset
+    '''
 
     schema = StructType([
         StructField("GLOBALEVENTID", LongType(), True),
@@ -144,6 +147,10 @@ def ingest_event_data(spark, data_files):
     return raw_df
 
 def clean_event_data(df):
+    '''
+    Function for cleaning the Spark event data
+    Only includes relevant columns
+    '''
 
     print("Cleaning ingested data...")
     clean_df = df \
@@ -178,6 +185,9 @@ def clean_event_data(df):
     return(clean_df)
     
 def ingest_cameo_data(spark, f):
+    '''
+    Spark ingestion function for the GDELT CAMEO code data
+    '''
     lines = f.text.splitlines()
     del lines[0]
     data = []
