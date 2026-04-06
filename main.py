@@ -1,8 +1,8 @@
 import os
 from pyspark.sql import SparkSession
-from download_data import get_file_list, download_files, get_event_codes
+from utils.download_data import *
 from utils.file_utils import clear_data, unzip_files
-from ingest_clean import ingest_gkg_data, clean_event_data, ingest_event_data, ingest_cameo_data
+from ingest_clean import *
 from analysis import *
 from mongodb import write_data
 from pymongo import MongoClient
@@ -35,6 +35,7 @@ db["events"].drop()
 db["separate_events"].drop()
 db["top_negative_events"].drop()
 db["top_impact_events"].drop()
+db["top_impact_event_locations"].drop()
 
 if os.path.isdir(DATA_DIR):
     clear_data(DATA_DIR)
@@ -58,21 +59,20 @@ def main():
     # Join GDELT CAMEO codes to the DF
     df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
     write_data(df_with_code_descriptions, "events")
-
+    '''
     # DF that separates events by location and topic
     separate_events_df = separate_events(df_with_code_descriptions)
-    separate_events_df.show(20)
     write_data(separate_events_df, "separate_events")
 
     # Events with most negative tone
     top_negative_events = negative_events(separate_events_df)
-    top_negative_events.show()
     write_data(top_negative_events, "top_negative_events")
 
     # Events with most theoretical impact
     top_impact_events_df = impactful_events(separate_events_df)
-    top_impact_events_df.show()
+    top_impact_locations = event_locations(top_impact_events_df)
     write_data(top_impact_events_df, "top_impact_events")
-
+    write_data(top_impact_locations, "top_impact_event_locations")
+'''
 if __name__=="__main__":
     main()

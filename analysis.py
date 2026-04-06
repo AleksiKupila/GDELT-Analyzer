@@ -25,8 +25,8 @@ def separate_events(df):
             mode("ActionGeo_FullName").alias("top_location"),
             mode("Actor1Name").alias("top_actor_1_name"),
             mode("Actor2Name").alias("top_actor_2_name"),
-            mode("ActionGeo_Lat").alias("top_lat_coordinates"),
-            mode("ActionGeo_Long").alias("top_long_coordinates"),
+            mode("lon"),
+            mode("lat"),
             mode("EventDescription").alias("top_event_description"),
             slice(
                 transform(
@@ -68,4 +68,3 @@ def impactful_events(df):
         .orderBy(col("impact_score").asc()) \
         .limit(15)
     return df
-    

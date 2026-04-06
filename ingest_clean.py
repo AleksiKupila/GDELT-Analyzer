@@ -156,6 +156,8 @@ def clean_event_data(df):
     .withColumn("num_sources", col("NumSources").cast("int")) \
     .withColumn("is_root_event", col("IsRootEvent").cast("boolean")) \
     .withColumn("date_added", to_date(col("DATEADDED").cast("string").substr(1,8), "yyyyMMdd")) \
+    .withColumn("lon", col("ActionGeo_Long")) \
+    .withColumn("lat", col("ActionGeo_Lat")) \
     .select(
 
         "GLOBALEVENTID",
@@ -166,7 +168,7 @@ def clean_event_data(df):
         "QuadClass", "goldstein_scale", "avg_tone",
         "num_mentions", "num_articles", "num_sources",
         "ActionGeo_FullName", "ActionGeo_CountryCode",
-        "ActionGeo_Lat", "ActionGeo_Long",
+        "lon", "lat",
         "SOURCEURL"
     ) \
     .filter(col("event_date").isNotNull()) \
