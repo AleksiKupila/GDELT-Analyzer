@@ -3,29 +3,22 @@ import streamlit as st
 import pandas as pd
 import pydeck as pdk
 from numpy.random import default_rng as rng
+from core.queries import *
+from core.mongo_utils import *
 
-@st.cache_resource
-def get_mongodb_client():
-    # Standard MongoDB URI
-    return MongoClient("mongodb://localhost:27017/")
+client = get_mongodb_client()
 
-def get_ui_data(collection_name, limit=1000):
-    client = get_mongodb_client()
-    db = client["gdelt"]
-    collection = db[collection_name]
-    
-    # Fetch data and convert to Pandas DF
-    cursor = collection.find().limit(limit)
-    df = pd.DataFrame(list(cursor))
-    
-    # Clean up MongoDB internal ID for cleaner display
-    if not df.empty and '_id' in df.columns:
-        df.drop(columns=['_id'], inplace=True)
-    
-    return df
+st.title('Global trends')
+st.write(
+    "This section offers insight into global trends in reporting." \
+    "The information is based on publicly available data from the GDELT project."
+)
 
 top_events_df = get_ui_data("top_events")
 events_per_country = get_ui_data("events_per_country", 15)
+tone_by_country = get_tone_extremes(15)
+pos_events = tone_by_country["most_positive"]
+neg_events = tone_by_country["most_negative"]
 
 st.subheader("Map of top reported events worldwide")
 
@@ -42,12 +35,50 @@ st.pydeck_chart(pdk.Deck(
     initial_view_state=pdk.ViewState(latitude=20, longitude=0, zoom=1, pitch=50),
 ))
 
+if st.checkbox("Show raw top event data"):
+    st.subheader("Raw data of top events")
+    st.write(top_events_df)
+
 st.subheader("Total reported events per country")
 
 st.bar_chart(
     events_per_country, 
-    x="ActionGeo_CountryCode", 
-    y="total_events",
-    sort="-total_events",
+    x="Country_Name", 
+    y="Total_Events",
+    x_label="Location / country",
+    y_label="Total events",
+    sort="-Total_Events",
     
     )
+
+if st.checkbox("Show raw data of events per country"):
+    st.subheader("Raw data of events per country")
+    st.write(events_per_country)
+
+st.subheader("Countries with most positive average tone in reporting")
+
+st.bar_chart(
+    pos_events,
+    x = "Country_Name",
+    y = "Average_Tone",
+    x_label= "Location / country",
+    y_label= "Average tone",
+    sort= "-Average_Tone"
+)
+
+st.subheader("Countries with most negative average tone in reporting")
+
+st.bar_chart(
+    neg_events,
+    x = "Country_Name",
+    y = "Average_Tone",
+    x_label= "Location / country",
+    y_label= "Average tone",
+    sort= "Average_Tone",
+    color= "red"
+
+)
+
+if st.checkbox("Show raw data of average tone"):
+    st.subheader("Raw data of average tone by country")
+    st.write(tone_by_country)

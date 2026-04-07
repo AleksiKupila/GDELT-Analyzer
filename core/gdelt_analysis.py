@@ -58,21 +58,12 @@ def separate_events(df):
 
     return separate_events
           
-def negative_events(df):
-
-    top_events = df \
-        .orderBy(col("average_tone").asc()) \
-        .limit(15)
-    
-    return top_events
-
 def impactful_events(df):
 
     df = df.withColumn(
         "impact_score",
         col("avg_goldstein_scale") * col("total_articles")) \
-        .orderBy(col("impact_score").asc()) \
-        .limit(15)
+        .orderBy(col("impact_score").asc()) 
     return df
 
 def top_events(df):
@@ -84,7 +75,7 @@ def top_events(df):
         .filter(col("lat").isNotNull()) \
         .filter(col("lon").isNotNull()) \
         .orderBy(col("num_articles").desc()) \
-        .limit(2000)
+        .limit(1000)
         
     return df
 
@@ -97,9 +88,23 @@ def events_by_country(df):
         df
         .filter(col("ActionGeo_CountryCode").isNotNull())
         .groupBy("ActionGeo_CountryCode")
-        .agg(count("*").alias("total_events"))
-        .select("ActionGeo_CountryCode", "total_events")
-        .orderBy(col("total_events").desc())
+        .agg(
+            count("*").alias("Total_Events"),
+            first("ActionGeo_FullName").alias("Country_Name"))
+        .select("Country_Name", "Total_Events")
+        .orderBy(col("Total_Events").desc())
+    )
+
+def tone_by_country(df):
+
+    return (
+        df
+        .groupBy("ActionGeo_CountryCode")
+        .agg(
+            avg("avg_tone").alias("Average_Tone"),
+            first("ActionGeo_FullName").alias("Country_Name")) 
+        .select("Country_Name", "Average_Tone")
+        .orderBy(col("Average_Tone").desc())
     )
 
 def run_analysis(df_with_code_descriptions):
@@ -115,10 +120,10 @@ def run_analysis(df_with_code_descriptions):
     separate_events_df = separate_events(df_with_code_descriptions)
     write_data(separate_events_df, "separate_events")
 
-    # Events with most negative tone
-    top_negative_events = negative_events(separate_events_df)
-    write_data(top_negative_events, "top_negative_events")
-
     # Events with most theoretical impact
     top_impact_events_df = impactful_events(separate_events_df)
     write_data(top_impact_events_df, "top_impact_events")
+
+    # Average_tone by country
+    average_tone_df = tone_by_country(df_with_code_descriptions)
+    write_data(average_tone_df, "tone_by_country")
