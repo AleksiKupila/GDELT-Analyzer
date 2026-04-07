@@ -1,4 +1,5 @@
 from pyspark.sql.functions import *
+from core.mongo_utils import write_data
 
 MEANINGFUL_EVENTS = ["05", "06", "07", "08", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
 
@@ -100,3 +101,24 @@ def events_by_country(df):
         .select("ActionGeo_CountryCode", "total_events")
         .orderBy(col("total_events").desc())
     )
+
+def run_analysis(df_with_code_descriptions):
+    # Top events worldwide by article count
+    top_events_df = top_events(df_with_code_descriptions)
+    write_data(top_events_df, "top_events")
+
+    # Total events per country
+    events_per_country = events_by_country(df_with_code_descriptions)
+    write_data(events_per_country, "events_per_country")
+
+    # DF that separates events by location and topic
+    separate_events_df = separate_events(df_with_code_descriptions)
+    write_data(separate_events_df, "separate_events")
+
+    # Events with most negative tone
+    top_negative_events = negative_events(separate_events_df)
+    write_data(top_negative_events, "top_negative_events")
+
+    # Events with most theoretical impact
+    top_impact_events_df = impactful_events(separate_events_df)
+    write_data(top_impact_events_df, "top_impact_events")

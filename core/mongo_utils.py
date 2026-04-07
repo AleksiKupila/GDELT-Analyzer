@@ -11,3 +11,16 @@ def write_data(df, collection):
 
     except Exception as e:
         print(f"Failed writing data into MongoDB: {e}")
+
+def drop_collections(db):
+
+    print("Dropping old collections...")
+    
+    db["events"].drop()
+    db["separate_events"].drop()
+    db["top_negative_events"].drop()
+    db["top_impact_events"].drop()
+    db["top_events"].drop()
+    db["events_per_country"].drop()
+
+    print("Old collections succesfully dropped!")
