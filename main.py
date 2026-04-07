@@ -44,6 +44,7 @@ db["separate_events"].drop()
 db["top_negative_events"].drop()
 db["top_impact_events"].drop()
 db["top_events"].drop()
+db["events_per_country"].drop()
 
 # Clear old files
 if os.path.isdir(DATA_DIR):

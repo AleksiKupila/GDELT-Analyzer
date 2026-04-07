@@ -89,15 +89,14 @@ def top_events(df):
 
 def events_by_country(df):
     '''
-    Groups events by country, aggregates total events
-    Returns country code and total event count for each country present in the dataset
+    Groups events by country, aggregates total events.
+    Excludes rows where ActionGeo_CountryCode is null.
     '''
-    df = df \
-        .filter(col("ActionGeo_CountryCode").isNotNull()) \
-        .groupBy("ActionGeo_CountryCode") \
-        .agg(count("*").alias("total_events")) \
-        .select(
-            "ActionGeo_CountryCode",
-            "total_events"
-        ).orderBy(col("total_events").desc())
-    return df
+    return (
+        df
+        .filter(col("ActionGeo_CountryCode").isNotNull())
+        .groupBy("ActionGeo_CountryCode")
+        .agg(count("*").alias("total_events"))
+        .select("ActionGeo_CountryCode", "total_events")
+        .orderBy(col("total_events").desc())
+    )

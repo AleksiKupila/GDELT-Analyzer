@@ -14,21 +14,20 @@ def get_ui_data(collection_name, limit=1000):
     db = client["gdelt"]
     collection = db[collection_name]
     
-    # Fetch data and convert to Pandas immediately
-    # We use list() because Pandas can consume a list of dicts directly
+    # Fetch data and convert to Pandas DF
     cursor = collection.find().limit(limit)
     df = pd.DataFrame(list(cursor))
     
     # Clean up MongoDB internal ID for cleaner display
     if not df.empty and '_id' in df.columns:
         df.drop(columns=['_id'], inplace=True)
-        
+    
     return df
 
 top_events_df = get_ui_data("top_events")
+events_per_country = get_ui_data("events_per_country", 15)
 
-st.subheader("Most reported events worldwide")
-st.write(top_events_df)
+st.subheader("Map of top reported events worldwide")
 
 layer = pdk.Layer(
     "HeatmapLayer",
@@ -42,3 +41,13 @@ st.pydeck_chart(pdk.Deck(
     layers=[layer],
     initial_view_state=pdk.ViewState(latitude=20, longitude=0, zoom=1, pitch=50),
 ))
+
+st.subheader("Total reported events per country")
+
+st.bar_chart(
+    events_per_country, 
+    x="ActionGeo_CountryCode", 
+    y="total_events",
+    sort="-total_events",
+    
+    )
