@@ -39,7 +39,7 @@ def get_tone_extremes(limit=10):
     results = list(db.tone_by_country.aggregate(pipeline))[0]
     return results if results else {"most_positive": [], "most_negative": []}
 
-def get_user_queried_events(country, date_min, date_max, goldstein_min, goldstein_max, limit=10):
+def get_user_queried_events(country, date_min, date_max, goldstein_min, goldstein_max, tone_min, tone_max, limit=10):
     db = get_mongodb_client()["gdelt"]
     pipeline = [
         {
@@ -52,12 +52,32 @@ def get_user_queried_events(country, date_min, date_max, goldstein_min, goldstei
                             "goldstein_scale": {
                                 "$gte": goldstein_min,
                                 "$lte": goldstein_max
+                            },
+                            "avg_tone": {
+                                "$gte": tone_min,
+                                "$lte": tone_max
                             }
                         }
                     },
                     { "$sort": { "num_articles": -1 } },
                     { "$limit": limit },
-                    { "$project": { "_id": 0 } }
+                    { 
+                        "$project": { 
+                            "_id": 0,
+                            "EventDescription": 1,
+                            "event_date": 1,
+                            "Actor1Name": 1,
+                            "Actor2Name": 1,
+                            "num_mentions": 1,
+                            "num_articles": 1,
+                            "goldstein_scale": 1,
+                            "QuadClass": 1,
+                            "avg_tone": 1,
+                            "ActionGeo_FullName": 1,
+                            "lon": 1,
+                            "lat": 1,
+                            "SOURCEURL": 1
+                              } }
                 ]
             }
         }
