@@ -17,13 +17,11 @@ MONGO_CLIENT_URL = "mongodb://127.0.0.1:27017/"
 # Downloads related
 MASTER_LIST_URL = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
 EVENT_CODE_URL = "https://www.gdeltproject.org/data/lookups/CAMEO.eventcodes.txt"
-TIME_LIMIT = 8
 
-
-def fetch_new_data(spark):
+def fetch_new_data(spark, time_limit):
      # Fetch CAMEO codes and the master URL list from GDELT
     event_codes = get_event_codes(EVENT_CODE_URL)
-    url_list = get_file_list("export", MASTER_LIST_URL, TIME_LIMIT)
+    url_list = get_file_list("export", MASTER_LIST_URL, time_limit)
 
     # Download files from GDELT
     if url_list:
@@ -40,12 +38,13 @@ def fetch_new_data(spark):
 
     return clean_df, event_codes
 
-def run_pipeline():
+def run_pipeline(time_limit=1, clear=False, download=True, analyze=True):
     
     # Connect to MongoDB Client
     try:
         mongo_client = MongoClient(MONGO_CLIENT_URL)
         print(f"Succesfully connected to MongoDB client at {MONGO_CLIENT_URL}")
+        db = mongo_client["gdelt"]
     except Exception as e:
         print(f"Connecting to MongoDB client failed: {e}")
 
@@ -56,27 +55,50 @@ def run_pipeline():
             .config("spark.mongodb.read.connection.uri", f"{MONGO_CLIENT_URL}db.collection") \
             .config("spark.mongodb.write.connection.uri", f"{MONGO_CLIENT_URL}db.collection") \
             .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.13:11.0.1") \
+            .config("spark.executor.memoryOverhead", "4g") \
+            .config("spark.driver.memory", "4g") \
+            .config("spark.executor.memory", "4g") \
+            .config("spark.driver.maxResultSize", "2g") \
+            .config("spark.memory.offHeap.enabled", "true") \
+            .config("spark.memory.offHeap.size", "2g") \
             .getOrCreate()
         print("Succesfully created Spark session!\n")
     except Exception as e:
         print(f"Failed to initialize Spark session: {e}")
 
-    db = mongo_client["gdelt"]
-    drop_collections(db)
+    if clear:
+        drop_collections(db, True)
+        # Clear old files
+        if os.path.isdir(DATA_DIR):
+            clear_data(DATA_DIR)
 
-    # Clear old files
-    if os.path.isdir(DATA_DIR):
-        clear_data(DATA_DIR)
+    if download:
+        time_hours = time_limit
+        clean_df, event_codes = fetch_new_data(spark, time_hours)
 
-    clean_df, event_codes = fetch_new_data(spark)
+        # Join GDELT CAMEO codes to the DF
+        event_codes_df = ingest_cameo_data(spark, event_codes)
+        df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
+        write_data(df_with_code_descriptions, "events")
 
-    # Join GDELT CAMEO codes to the DF
-    event_codes_df = ingest_cameo_data(spark, event_codes)
-    df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
-    write_data(df_with_code_descriptions, "events")
+    if analyze:
+        # run_analysis expects a Spark DataFrame
+        if download:
+            analysis_df = df_with_code_descriptions
+        else:
+            # Drop old analysis collections, read events from db
+            drop_collections(db, False)
+            analysis_df = (
+                spark.read
+                .format("mongodb")
+                .option("database", "gdelt")
+                .option("collection", "events")
+                .load()
+            )
 
-    run_analysis(df_with_code_descriptions)
-    print("Pipeline ran succesfully!")
+        run_analysis(analysis_df)
+
+    print("Pipeline completed succesfully!")
 
 if __name__=="__main__":
     run_pipeline()

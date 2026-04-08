@@ -17,16 +17,21 @@ def write_data(df, collection):
     except Exception as e:
         print(f"Failed writing data into MongoDB: {e}")
 
-def drop_collections(db):
+def drop_collections(db, all_collections = True):
 
-    print("Dropping old collections...")
+    if all_collections:
+        print("Dropping all old collections...")
+        db["events"].drop()
 
-    db["events"].drop()
+    else:
+        print("Dropping old analysis collections...")
+        
     db["separate_events"].drop()
     db["top_negative_events"].drop()
     db["top_impact_events"].drop()
     db["top_events"].drop()
     db["events_per_country"].drop()
     db["tone_by_country"].drop()
+    db["country_event_spike"].drop()
 
     print("Old collections succesfully dropped!")
