@@ -1,65 +1,124 @@
 from core.mongo_utils import get_mongodb_client
 import pandas as pd
 
-def get_ui_data(collection_name, limit=1000):
 
+def get_ui_data(collection_name: str, limit: int = 1000) -> pd.DataFrame:
+    """
+    Fetch a pre-computed collection from MongoDB and return it as a DataFrame.
+    """
     db = get_mongodb_client()["gdelt"]
-    collection = db[collection_name]
-    
-    # Fetch data and convert to Pandas DF
-    cursor = collection.find().limit(limit)
+    cursor = db[collection_name].find().limit(limit)
     df = pd.DataFrame(list(cursor))
-    
-    # Clean up MongoDB internal ID for cleaner display
-    if not df.empty and '_id' in df.columns:
-        df.drop(columns=['_id'], inplace=True)
-    
+
+    if not df.empty and "_id" in df.columns:
+        df.drop(columns=["_id"], inplace=True)
+
     return df
 
-def get_tone_extremes(limit=10):
+
+def get_tone_extremes(limit: int = 10) -> dict:
+    """
+    Return the ``limit`` most-positive and most-negative countries by average tone.
+
+    Returns
+    -------
+    dict with keys ``most_positive`` and ``most_negative``, each a list of dicts.
+    """
     db = get_mongodb_client()["gdelt"]
-    
+
     pipeline = [
         {
             "$facet": {
                 "most_positive": [
-                    { "$sort": { "Average_Tone": -1 } },
-                    { "$limit": limit },
-                    { "$project": { "_id": 0, "Country_Name": 1, "Average_Tone": 1 } }
+                    {"$sort": {"Average_Tone": -1}},
+                    {"$limit": limit},
+                    {"$project": {"_id": 0, "Country_Name": 1, "Average_Tone": 1}},
                 ],
                 "most_negative": [
-                    { "$sort": { "Average_Tone": 1 } },
-                    { "$limit": limit },
-                    { "$project": { "_id": 0, "Country_Name": 1, "Average_Tone": 1 } }
-                ]
+                    {"$sort": {"Average_Tone": 1}},
+                    {"$limit": limit},
+                    {"$project": {"_id": 0, "Country_Name": 1, "Average_Tone": 1}},
+                ],
             }
         }
     ]
-    
-    results = list(db.tone_by_country.aggregate(pipeline))[0]
-    return results if results else {"most_positive": [], "most_negative": []}
 
-def get_user_queried_events(country, actor1, actor2, date_min, date_max, goldstein_min, goldstein_max, tone_min, tone_max, limit=10):
-    db = get_mongodb_client()["gdelt"]
+    results = list(db.tone_by_country.aggregate(pipeline))
+    return results[0] if results else {"most_positive": [], "most_negative": []}
+
+
+def get_user_queried_events(
+    country: str | None = None,
+    actor1: str | None = None,
+    actor2: str | None = None,
+    date_min=None,
+    date_max=None,
+    goldstein_min: float = -10.0,
+    goldstein_max: float = 10.0,
+    tone_min: float = -100.0,
+    tone_max: float = 100.0,
+    mentions_min: int = 0,
+    mentions_max: int | None = None,
+    limit: int = 50,
+) -> pd.DataFrame:
+    """
+    Query the ``events`` collection with the supplied filters.
+
+    All text filters (country, actor1, actor2) are case-insensitive regex
+    matches so partial names work.  Omit a filter by passing ``None``.
+
+    Parameters
+    ----------
+    country       : Partial / full ActionGeo_FullName match.
+    actor1        : Partial / full Actor1Name match.
+    actor2        : Partial / full Actor2Name match.
+    date_min      : Lower bound for event_date (datetime).
+    date_max      : Upper bound for event_date (datetime).
+    goldstein_min : Minimum Goldstein scale value (−10 … +10).
+    goldstein_max : Maximum Goldstein scale value (−10 … +10).
+    tone_min      : Minimum average tone.
+    tone_max      : Maximum average tone.
+    mentions_min  : Minimum number of mentions.
+    mentions_max  : Maximum number of mentions (None = no upper bound).
+    limit         : Maximum number of results to return.
+
+    Returns
+    -------
+    pandas.DataFrame – empty if nothing matched.
+    """
+    # --- Build the $match document dynamically ----------------------------
+    match: dict = {}
+
+    if country:
+        match["ActionGeo_FullName"] = {"$regex": country.strip(), "$options": "i"}
+    if actor1:
+        match["Actor1Name"] = {"$regex": actor1.strip(), "$options": "i"}
+    if actor2:
+        match["Actor2Name"] = {"$regex": actor2.strip(), "$options": "i"}
+
+    # Date range
+    date_filter: dict = {}
+    if date_min is not None:
+        date_filter["$gte"] = date_min
+    if date_max is not None:
+        date_filter["$lte"] = date_max
+    if date_filter:
+        match["event_date"] = date_filter
+
+    # Numeric range filters
+    match["goldstein_scale"] = {"$gte": goldstein_min, "$lte": goldstein_max}
+    match["avg_tone"] = {"$gte": tone_min, "$lte": tone_max}
+
+    mentions_filter: dict = {"$gte": mentions_min}
+    if mentions_max is not None:
+        mentions_filter["$lte"] = mentions_max
+    match["num_mentions"] = mentions_filter
+
+    # --- Aggregation pipeline ---------------------------------------------
     pipeline = [
-        {
-            "$match": {
-                "ActionGeo_FullName": country,
-                "Actor1Name": actor1,
-                "Actor2Name": actor2,
-                "event_date": {"$gte": date_min, "$lte": date_max},
-                "goldstein_scale": {
-                    "$gte": goldstein_min,
-                    "$lte": goldstein_max
-                },
-                "avg_tone": {
-                    "$gte": tone_min,
-                    "$lte": tone_max
-                }
-            }
-        },
-        { "$sort": { "num_articles": -1 } },
-        { "$limit": limit },
+        {"$match": match},
+        {"$sort": {"num_articles": -1}},
+        {"$limit": limit},
         {
             "$project": {
                 "_id": 0,
@@ -75,37 +134,32 @@ def get_user_queried_events(country, actor1, actor2, date_min, date_max, goldste
                 "ActionGeo_FullName": 1,
                 "lon": 1,
                 "lat": 1,
-                "SOURCEURL": 1
+                "SOURCEURL": 1,
             }
-        }
+        },
     ]
+
+    db = get_mongodb_client()["gdelt"]
     results = list(db.events.aggregate(pipeline))
-    df = pd.DataFrame(results if results else [])
-    return df
+    return pd.DataFrame(results if results else [])
 
 
-def get_country_event_spikes(only_spikes=False, limit=50):
+def get_country_event_spikes(only_spikes: bool = False, limit: int = 50) -> pd.DataFrame:
     """
-    Retrieves pre-computed country event spike results from MongoDB.
+    Retrieve pre-computed country event spike results from MongoDB.
 
     Parameters
     ----------
     only_spikes : bool
         When True only countries flagged as ``is_spike = True`` are returned.
-        Defaults to False (return all countries, sorted by spike_score desc).
     limit : int
-        Maximum number of rows to return.  Defaults to 50.
+        Maximum number of rows to return.
 
     Returns
     -------
-    pandas.DataFrame
-        Columns: ``ActionGeo_CountryCode``, ``spike_events``,
-        ``baseline_events``, ``hourly_baseline_rate``,
-        ``expected_spike_events``, ``spike_score``, ``is_spike``.
-        Empty DataFrame if the collection does not exist yet.
+    pandas.DataFrame – empty if the collection does not exist yet.
     """
     db = get_mongodb_client()["gdelt"]
-    collection = db["country_event_spike"]
 
     match_stage = {"$match": {"is_spike": True}} if only_spikes else {"$match": {}}
 
@@ -127,5 +181,5 @@ def get_country_event_spikes(only_spikes=False, limit=50):
         },
     ]
 
-    results = list(collection.aggregate(pipeline))
+    results = list(db["country_event_spike"].aggregate(pipeline))
     return pd.DataFrame(results if results else [])

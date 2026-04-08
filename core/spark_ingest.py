@@ -1,64 +1,6 @@
 from pyspark.sql.types import *
 from pyspark.sql.functions import col, to_date, window
 
-def ingest_gkg_data(spark, data_files):
-
-    gkg_schema = StructType([
-    # Core Identifiers
-    StructField("GKGRECORDID", StringType(), True),                # Unique serial ID [cite: 459]
-    StructField("DATE", StringType(), True),                   # YYYYMMDDHHMMSS format 
-    StructField("SOURCECOLLECTIONIDENTIFIER", IntegerType(), True), # 1=Web, 2=Citation, etc. [cite: 473, 477]
-    StructField("SOURCECOMMONNAME", StringType(), True),         # e.g., bbc.co.uk [cite: 484, 486]
-    StructField("DOCUMENTIDENTIFIER", StringType(), True),       # URL or DOI [cite: 489, 492]
-    
-    # Counts & Themes
-    StructField("OLDCOUNTS", StringType(), True),                   # Legacy semicolon-delimited counts [cite: 495]
-    StructField("NEWCOUNTS", StringType(), True),                 # Counts with character offsets [cite: 516]
-    StructField("V1THEMES", StringType(), True),                   # List of themes [cite: 520]
-    StructField("V2ENHANCEDTHEMES", StringType(), True),           # Themes with offsets [cite: 524]
-    
-    # Locations
-    StructField("V1LOCATIONS", StringType(), True),                # Semicolon-delimited locations [cite: 529]
-    StructField("V2ENHANCEDLOCATIONS", StringType(), True),        # Locations with offsets and ADM2 [cite: 567]
-    
-    # Persons & Organizations
-    StructField("V1PERSONS", StringType(), True),                  # List of persons [cite: 571]
-    StructField("V2ENHANCEDPERSONS", StringType(), True),          # Persons with offsets [cite: 574]
-    StructField("V1ORGANIZATIONS", StringType(), True),            # List of organizations [cite: 577]
-    StructField("V2ENHANCEDORGANIZATIONS", StringType(), True),    # Organizations with offsets [cite: 587]
-    
-    # Tone & Dates
-    StructField("V1.5TONE", StringType(), True),                   # 7 core emotional dimensions [cite: 590, 592]
-    StructField("V2.1ENHANCEDDATES", StringType(), True),          # Date mentions with offsets [cite: 610]
-    StructField("V2GCAM", StringType(), True),                     # 2,300+ emotional dimensions [cite: 380, 622]
-    
-    # Media & Social Embeds
-    StructField("V2.1SHARINGIMAGE", StringType(), True),           # Primary article image URL [cite: 642, 643]
-    StructField("V2.1RELATEDIMAGES", StringType(), True),          # Inline image URLs [cite: 646, 649]
-    StructField("V2.1SOCIALIMAGEEMBEDS", StringType(), True),      # Twitter/Instagram image URLs [cite: 652, 653]
-    StructField("V2.1SOCIALVIDEOEMBEDS", StringType(), True),      # YouTube/Vimeo/Vine URLs [cite: 657, 659]
-    
-    # Textual Analysis
-    StructField("V2.1QUOTATIONS", StringType(), True),              # Quoted statements [cite: 661, 663]
-    StructField("V2.1ALLNAMES", StringType(), True),               # All proper names (events, laws, etc) [cite: 670, 672]
-    StructField("V2.1AMOUNTS", StringType(), True),                # Numeric amounts (troops, dollars, etc) [cite: 676, 678]
-    
-    # Translation & Extras
-    StructField("V2.1TRANSLATIONINFO", StringType(), True),        # Source language and engine info [cite: 685]
-    StructField("V2EXTRASXML", StringType(), True)                 # XML block for specialized data [cite: 695]
-])
-
-    df = spark.read \
-        .option("delimiter", "\t") \
-        .option("header", "false") \
-        .option("inferSchema", "false") \
-        .option("mode", "PERMISSIVE") \
-        .csv(data_files, schema=gkg_schema)
-    
-    print(f"Total rows loaded: {df.count()}")
-
-    return df
-
 def ingest_event_data(spark, data_files):
     '''
     Spark ingestion function for the GDELT event dataset
@@ -202,4 +144,62 @@ def ingest_cameo_data(spark, f):
     ])
     df = spark.createDataFrame(data, schema)
     print(f"Cameo dataframe succesfully created! Total rows loaded: {df.count()}")
+    return df
+
+def ingest_gkg_data(spark, data_files):
+
+    gkg_schema = StructType([
+    # Core Identifiers
+    StructField("GKGRECORDID", StringType(), True),                # Unique serial ID [cite: 459]
+    StructField("DATE", StringType(), True),                   # YYYYMMDDHHMMSS format 
+    StructField("SOURCECOLLECTIONIDENTIFIER", IntegerType(), True), # 1=Web, 2=Citation, etc. [cite: 473, 477]
+    StructField("SOURCECOMMONNAME", StringType(), True),         # e.g., bbc.co.uk [cite: 484, 486]
+    StructField("DOCUMENTIDENTIFIER", StringType(), True),       # URL or DOI [cite: 489, 492]
+    
+    # Counts & Themes
+    StructField("OLDCOUNTS", StringType(), True),                   # Legacy semicolon-delimited counts [cite: 495]
+    StructField("NEWCOUNTS", StringType(), True),                 # Counts with character offsets [cite: 516]
+    StructField("V1THEMES", StringType(), True),                   # List of themes [cite: 520]
+    StructField("V2ENHANCEDTHEMES", StringType(), True),           # Themes with offsets [cite: 524]
+    
+    # Locations
+    StructField("V1LOCATIONS", StringType(), True),                # Semicolon-delimited locations [cite: 529]
+    StructField("V2ENHANCEDLOCATIONS", StringType(), True),        # Locations with offsets and ADM2 [cite: 567]
+    
+    # Persons & Organizations
+    StructField("V1PERSONS", StringType(), True),                  # List of persons [cite: 571]
+    StructField("V2ENHANCEDPERSONS", StringType(), True),          # Persons with offsets [cite: 574]
+    StructField("V1ORGANIZATIONS", StringType(), True),            # List of organizations [cite: 577]
+    StructField("V2ENHANCEDORGANIZATIONS", StringType(), True),    # Organizations with offsets [cite: 587]
+    
+    # Tone & Dates
+    StructField("V1.5TONE", StringType(), True),                   # 7 core emotional dimensions [cite: 590, 592]
+    StructField("V2.1ENHANCEDDATES", StringType(), True),          # Date mentions with offsets [cite: 610]
+    StructField("V2GCAM", StringType(), True),                     # 2,300+ emotional dimensions [cite: 380, 622]
+    
+    # Media & Social Embeds
+    StructField("V2.1SHARINGIMAGE", StringType(), True),           # Primary article image URL [cite: 642, 643]
+    StructField("V2.1RELATEDIMAGES", StringType(), True),          # Inline image URLs [cite: 646, 649]
+    StructField("V2.1SOCIALIMAGEEMBEDS", StringType(), True),      # Twitter/Instagram image URLs [cite: 652, 653]
+    StructField("V2.1SOCIALVIDEOEMBEDS", StringType(), True),      # YouTube/Vimeo/Vine URLs [cite: 657, 659]
+    
+    # Textual Analysis
+    StructField("V2.1QUOTATIONS", StringType(), True),              # Quoted statements [cite: 661, 663]
+    StructField("V2.1ALLNAMES", StringType(), True),               # All proper names (events, laws, etc) [cite: 670, 672]
+    StructField("V2.1AMOUNTS", StringType(), True),                # Numeric amounts (troops, dollars, etc) [cite: 676, 678]
+    
+    # Translation & Extras
+    StructField("V2.1TRANSLATIONINFO", StringType(), True),        # Source language and engine info [cite: 685]
+    StructField("V2EXTRASXML", StringType(), True)                 # XML block for specialized data [cite: 695]
+])
+
+    df = spark.read \
+        .option("delimiter", "\t") \
+        .option("header", "false") \
+        .option("inferSchema", "false") \
+        .option("mode", "PERMISSIVE") \
+        .csv(data_files, schema=gkg_schema)
+    
+    print(f"Total rows loaded: {df.count()}")
+
     return df

@@ -4,8 +4,6 @@ from pyspark import StorageLevel
 from core.mongo_utils import write_data
 from pyspark.sql.window import Window
 
-MEANINGFUL_EVENTS = ["05", "06", "07", "08", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
-
 def join_cameo_df(cameo_df, event_df):
     return event_df.join(cameo_df, on="EventCode", how="inner")
 
@@ -13,20 +11,13 @@ def separate_events(df):
     '''
     Function that attempts to group events by country, date, quad class and event codes.
     Includes sample URLs for each event for later AI analysis.
-    Does not count events with vague root codes.
-    Sorts events by article count.
-
-    Uses a ranked window instead of collect_list+sort_array to avoid the large
-    in-memory list accumulation that caused OOM on big datasets.
     '''
-    # Assign ranks per group so we can pick the top-N URLs without collect_list
     url_window = Window.partitionBy(
         "ActionGeo_CountryCode", "event_date", "QuadClass", "EventBaseCode"
     ).orderBy(col("num_mentions").desc())
 
     ranked = df \
         .filter(col("ActionGeo_CountryCode").isNotNull()) \
-        .filter(col("EventRootCode").isin(MEANINGFUL_EVENTS)) \
         .withColumn("url_rank", row_number().over(url_window))
 
     # Collect up to 20 top URLs per group using a conditional collect_list on pre-ranked rows
@@ -111,6 +102,8 @@ def tone_by_country(df):
 def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spike_hours=24, spike_threshold=0.5):
     """
     Detects countries experiencing an unusual spike in event activity.
+    Works best with longer baselines, such as 144h/6 days.
+
 
     """
     events_by_time = (
@@ -122,21 +115,11 @@ def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spik
         .filter(col("event_ts").isNotNull())
     )
 
-    # ------------------------------------------------------------------
-    # 2. Anchor every country to the same global latest timestamp so the
-    #    spike / baseline windows are identical for all countries and
-    #    results are directly comparable.
-    # ------------------------------------------------------------------
+    # Get latest global timestamp (newest event)
     latest_ts = events_by_time.agg(max("event_ts").alias("global_latest_ts")).first()["global_latest_ts"]
 
-    # ------------------------------------------------------------------
-    # 3. Label each row as belonging to the spike window, the baseline
-    #    window, or neither (data older than both windows).
-    #
-    #    hours_from_latest = 0  → the most recent event
-    #    hours_from_latest = spike_hours → boundary between the windows
-    #    hours_from_latest = spike_hours + baseline_hours → oldest considered
-    # ------------------------------------------------------------------
+    # Calculate how far the event is from the newest event
+    # Then label the event to be in spike or baseline period depending on its age
     labelled = (
         events_by_time
         .withColumn(
@@ -153,9 +136,7 @@ def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spik
         )
     )
 
-    # ------------------------------------------------------------------
-    # 4. Aggregate per-country totals for each window
-    # ------------------------------------------------------------------
+    # Group by country and calculate total events that happened at the same time
     aggregated = (
         labelled
         .groupBy("ActionGeo_CountryCode")
@@ -165,13 +146,8 @@ def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spik
         )
     )
 
-    # ------------------------------------------------------------------
-    # 5. Derive the hourly baseline rate and the expected event count for
-    #    the spike window under "business-as-usual" conditions.
-    #
-    #    hourly_baseline_rate  = baseline_events / baseline_hours
-    #    expected_spike_events = hourly_baseline_rate × spike_hours
-    # ------------------------------------------------------------------
+    # Calculate baseline (the average events/hour)
+    # Then Calculate what is expected for the spike period to be 'normal' amount of events
     with_expected = (
         aggregated
         .withColumn(
@@ -184,16 +160,7 @@ def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spik
         )
     )
 
-    # ------------------------------------------------------------------
-    # 6. Compute the spike score and flag countries exceeding the threshold.
-    #
-    #    Normal   → spike_score ≈ 0
-    #    Spike    → spike_score > spike_threshold  (e.g. 0.5 = 50 % above)
-    #    Quieter  → spike_score < 0
-    #
-    #    Edge-case: zero baseline but non-zero recent events → the raw
-    #    spike_events count is used so new-activity countries are surfaced.
-    # ------------------------------------------------------------------
+    # Calculate score based on expected vs actual spike events
     scored = (
         with_expected
         .withColumn(
@@ -218,9 +185,7 @@ def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spik
 
 
 def run_analysis(df_with_code_descriptions):
-    # DISK_ONLY avoids filling the JVM heap with the cached DataFrame.
-    # Each analysis step reads from disk rather than competing for heap space
-    # with the aggregation shuffle buffers.
+
     cached_df = df_with_code_descriptions.persist(StorageLevel.DISK_ONLY)
     try:
         # Top events worldwide by article count
@@ -228,7 +193,6 @@ def run_analysis(df_with_code_descriptions):
 
         # Total events per country
         events_by_country(cached_df)
-
 
         # DF that separates events by location and topic
         separate_events(cached_df)
