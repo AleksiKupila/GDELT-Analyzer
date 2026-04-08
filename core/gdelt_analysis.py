@@ -66,7 +66,7 @@ def top_events(df):
     result = df.filter(col("lat").isNotNull()) \
         .filter(col("lon").isNotNull()) \
         .orderBy(col("num_articles").desc()) \
-        .limit(1000)
+        .limit(10000)
     
     write_data(result, "top_events")
 

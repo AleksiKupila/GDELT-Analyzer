@@ -63,7 +63,7 @@ with col_limit:
     )
 
 st.markdown(" ")
-load_btn = st.button("🔄  Load spike data", use_container_width=False)
+load_btn = st.button("🔄  Load spike data", width='content')
 
 # ── Results ───────────────────────────────────────────────────────────────────
 if load_btn:
@@ -120,7 +120,7 @@ if load_btn:
                 },
                 na_rep="—",
             ),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
         )
 
@@ -142,7 +142,7 @@ if load_btn:
             },
             na_rep="—",
         ),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
     )
 
@@ -154,7 +154,14 @@ if load_btn:
             .set_index("ActionGeo_CountryCode")[["spike_score"]]
             .head(20)
         )
-        st.bar_chart(chart_df, color="#4FC3F7", use_container_width=True)
+        st.bar_chart(
+            chart_df, 
+            color="#4FC3F7", 
+            width='stretch', 
+            x_label="Country",
+            y_label="Spike score",
+            sort="-spike_score",
+        )
 
     # ── Download ──────────────────────────────────────────────────────────
     csv_data = spike_df.to_csv(index=False).encode("utf-8")
@@ -162,5 +169,5 @@ if load_btn:
         label="⬇️  Download spike data as CSV",
         data=csv_data,
         file_name="gdelt_spikes.csv",
-        mime="text/csv",
+        mime="text/csv"
     )

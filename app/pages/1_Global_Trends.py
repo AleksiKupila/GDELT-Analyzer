@@ -1,8 +1,10 @@
 import streamlit as st
 import pydeck as pdk
 import pandas as pd
+from datetime import datetime, timedelta
 
-from core.queries import get_ui_data, get_tone_extremes
+from core.queries import get_ui_data, get_tone_extremes, get_top_events
+from core.mongo_utils import get_mongodb_client
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -33,15 +35,29 @@ st.markdown("---")
 # ── Data loading ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner="Loading data from database…")
 def load_global_data():
-    """Load all global-trend datasets; returns a tuple of DataFrames / dicts."""
-    top_events_df      = get_ui_data("top_events")
+    # Load all global-trend datasets; returns a tuple of DataFrames / dicts
     events_per_country = get_ui_data("events_per_country", limit=15)
     tone_extremes      = get_tone_extremes(limit=15)
-    return top_events_df, events_per_country, tone_extremes
+    return events_per_country, tone_extremes
+
+
+@st.cache_data(ttl=300, show_spinner="Loading available dates…")
+def load_available_dates(hours = 200) -> list[datetime]:
+    """Return a sorted list of distinct event_date values from top_events."""
+    db = get_mongodb_client()["gdelt"]
+    raw = db["top_events"].distinct("event_date")
+    slider_range = datetime.now() - timedelta(hours=hours)
+    # Keep only proper datetime objects and sort ascending
+    dates = sorted([d for d in raw if isinstance(d, datetime) and d >= slider_range])
+    return dates
+
+
+def load_top_events(time: datetime):
+    return get_top_events(time, 1000)
 
 
 try:
-    top_events_df, events_per_country, tone_extremes = load_global_data()
+    events_per_country, tone_extremes = load_global_data()
 except Exception as exc:
     st.error(
         f"❌ Could not connect to the database: {exc}\n\n"
@@ -56,13 +72,33 @@ pos_events = pd.DataFrame(pos_tone)
 neg_events = pd.DataFrame(neg_tone)
 
 # ── Section 1: Heatmap ───────────────────────────────────────────────────────
-st.subheader("Heatmap of top reported events from the last 7 days")
+st.subheader("Heatmap of top reported events")
 
-if top_events_df.empty:
+available_dates = load_available_dates()
+
+if not available_dates:
     st.warning("No top-event data found. Run the pipeline to populate the database.")
 else:
+    # Build human-readable labels for the slider (e.g. "Apr 08, 2026")
+    date_labels  = [d.strftime("%b %d, %Y") for d in available_dates]
+    label_to_dt  = dict(zip(date_labels, available_dates))
+
+    selected_label = st.select_slider(
+        "Select date:",
+        options=date_labels,
+        value=date_labels[-1],
+        help="Timestamps are recorded daily at 21:00 UTC.",
+    )
+    selected_time = label_to_dt[selected_label]
+
+    top_events_df = load_top_events(selected_time)
+
     required_cols = {"lon", "lat"}
-    if required_cols.issubset(top_events_df.columns):
+    if top_events_df.empty:
+        st.info(f"No event data available for {selected_label}.")
+    elif not required_cols.issubset(top_events_df.columns):
+        st.warning("Top-event data is missing `lon`/`lat` columns — cannot render heatmap.")
+    else:
         layer = pdk.Layer(
             "HeatmapLayer",
             data=top_events_df,
@@ -78,16 +114,14 @@ else:
                 ),
             )
         )
-    else:
-        st.warning("Top-event data is missing `lon`/`lat` columns — cannot render heatmap.")
 
     with st.expander("Show raw top-event data"):
-        st.dataframe(top_events_df, use_container_width=True, hide_index=True)
+        st.dataframe(top_events_df, width='stretch', hide_index=True)
 
 st.markdown("---")
 
 # ── Section 2: Events per country ────────────────────────────────────────────
-st.subheader("📊 Total reported events per country  (top 15)")
+st.subheader("Total reported events per country  (top 15)")
 
 if events_per_country.empty:
     st.warning("No events-per-country data found.")
@@ -100,10 +134,10 @@ elif {"Country_Name", "Total_Events"}.issubset(events_per_country.columns):
         y_label="Total events",
         sort="-Total_Events",
         color="#4FC3F7",
-        use_container_width=True,
+        width='stretch',
     )
     with st.expander("Show raw events-per-country data"):
-        st.dataframe(events_per_country, use_container_width=True, hide_index=True)
+        st.dataframe(events_per_country, width='stretch', hide_index=True)
 else:
     st.warning("Events-per-country data is missing expected columns.")
 
@@ -125,7 +159,7 @@ with col_pos:
             y_label="Average tone",
             sort="-Average_Tone",
             color="#4CAF50",
-            use_container_width=True,
+            width='stretch',
         )
 
 with col_neg:
@@ -141,12 +175,12 @@ with col_neg:
             y_label="Average tone",
             sort="Average_Tone",
             color="#EF5350",
-            use_container_width=True,
+            width='stretch',
         )
 
 if not pos_events.empty or not neg_events.empty:
     with st.expander("Show raw average-tone data"):
         st.write("**Most positive**")
-        st.dataframe(pos_events, use_container_width=True, hide_index=True)
+        st.dataframe(pos_events, width='stretch', hide_index=True)
         st.write("**Most negative**")
-        st.dataframe(neg_events, use_container_width=True, hide_index=True)
+        st.dataframe(neg_events, width='stretch', hide_index=True)

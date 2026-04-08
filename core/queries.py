@@ -1,8 +1,9 @@
 from core.mongo_utils import get_mongodb_client
+from datetime import datetime
 import pandas as pd
 
 
-def get_ui_data(collection_name: str, limit: int = 1000) -> pd.DataFrame:
+def get_ui_data(collection_name, limit = 1000):
     """
     Fetch a pre-computed collection from MongoDB and return it as a DataFrame.
     """
@@ -14,6 +15,19 @@ def get_ui_data(collection_name: str, limit: int = 1000) -> pd.DataFrame:
         df.drop(columns=["_id"], inplace=True)
 
     return df
+
+def get_top_events(time = datetime(year=2026, month=4, day=8, hour=21, minute=0, second=0), limit = 1000):
+
+    db = get_mongodb_client()["gdelt"]
+
+    pipeline = [
+        {"$match": {"event_date": time}},
+        {"$project": {"_id": 0, "lon": 1, "lat": 1}},
+        {"$limit": limit},
+    ]
+
+    results = list(db.top_events.aggregate(pipeline))
+    return pd.DataFrame(results if results else [])
 
 
 def get_tone_extremes(limit: int = 10) -> dict:
