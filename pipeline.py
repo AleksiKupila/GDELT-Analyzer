@@ -1,4 +1,5 @@
 import os
+import time
 from pyspark.sql import SparkSession
 from utils.download_utils import *
 from utils.file_utils import *
@@ -38,17 +39,34 @@ def fetch_new_data(spark, time_limit):
 
     return clean_df, event_codes
 
-def run_pipeline(time_limit=1, clear=False, download=True, analyze=True):
-    
-    # Connect to MongoDB Client
+def run_pipeline(time_limit=1, clear=False, download=False, analyze=False, index=False):
+
+    _pipeline_start = time.perf_counter()
+    print("\n=== Pipeline started ===")
+
+    collections = [
+        "events",
+        "separate_events", 
+        "top_negative_events", 
+        "top_impact_events", 
+        "top_events", 
+        "events_per_country", 
+        "tone_by_country", 
+        "country_event_spike",
+        "events_by_time_and_country"]
+
+    # ── Connect to MongoDB ────────────────────────────────────────────────────
+    _t = time.perf_counter()
     try:
         mongo_client = MongoClient(MONGO_CLIENT_URL)
         print(f"Succesfully connected to MongoDB client at {MONGO_CLIENT_URL}")
         db = mongo_client["gdelt"]
     except Exception as e:
         print(f"Connecting to MongoDB client failed: {e}")
+    print(f"[timer] MongoDB connection: {time.perf_counter() - _t:.2f}s")
 
-    # Start Spark session
+    # ── Start Spark session ───────────────────────────────────────────────────
+    _t = time.perf_counter()
     try:
         spark = SparkSession.builder \
             .appName("GDELT-Analyzer") \
@@ -61,33 +79,43 @@ def run_pipeline(time_limit=1, clear=False, download=True, analyze=True):
             .config("spark.driver.maxResultSize", "2g") \
             .config("spark.memory.offHeap.enabled", "true") \
             .config("spark.memory.offHeap.size", "2g") \
+            .config("spark.sql.session.timeZone", "UTC") \
             .getOrCreate()
+        # Force UTC even if an existing session was reused via getOrCreate()
+        spark.conf.set("spark.sql.session.timeZone", "UTC")
         print("Succesfully created Spark session!\n")
     except Exception as e:
         print(f"Failed to initialize Spark session: {e}")
+    print(f"[timer] Spark session startup: {time.perf_counter() - _t:.2f}s")
 
+    # ── Clear ─────────────────────────────────────────────────────────────────
     if clear:
-        drop_collections(db, True)
-        # Clear old files
+        _t = time.perf_counter()
+        drop_collections(db, collections, True)
         if os.path.isdir(DATA_DIR):
             clear_data(DATA_DIR)
+        print(f"[timer] Clear step: {time.perf_counter() - _t:.2f}s")
 
+    # ── Download & ingest ─────────────────────────────────────────────────────
     if download:
+        _t = time.perf_counter()
         time_hours = time_limit
         clean_df, event_codes = fetch_new_data(spark, time_hours)
+        print(f"[timer] Data download & extraction: {time.perf_counter() - _t:.2f}s")
 
-        # Join GDELT CAMEO codes to the DF
+        _t = time.perf_counter()
         event_codes_df = ingest_cameo_data(spark, event_codes)
         df_with_code_descriptions = join_cameo_df(event_codes_df, clean_df)
         write_data(df_with_code_descriptions, "events")
+        print(f"[timer] CAMEO join & MongoDB write: {time.perf_counter() - _t:.2f}s")
 
+    # ── Analysis ──────────────────────────────────────────────────────────────
     if analyze:
-        # run_analysis expects a Spark DataFrame
+        _t = time.perf_counter()
         if download:
             analysis_df = df_with_code_descriptions
         else:
-            # Drop old analysis collections, read events from db
-            drop_collections(db, False)
+            drop_collections(db, collections, False)
             analysis_df = (
                 spark.read
                 .format("mongodb")
@@ -95,10 +123,20 @@ def run_pipeline(time_limit=1, clear=False, download=True, analyze=True):
                 .option("collection", "events")
                 .load()
             )
+        print(f"[timer] Analysis DataFrame preparation: {time.perf_counter() - _t:.2f}s")
 
+        _t = time.perf_counter()
         run_analysis(analysis_df)
+        print(f"[timer] run_analysis (all sub-tasks): {time.perf_counter() - _t:.2f}s")
 
-    print("Pipeline completed succesfully!")
+    # ── Index setup ───────────────────────────────────────────────────────────
+    if index:
+        _t = time.perf_counter()
+        setup_indexes(db, collections)
+        print(f"[timer] Index setup: {time.perf_counter() - _t:.2f}s")
+
+    _total = time.perf_counter() - _pipeline_start
+    print(f"\n=== Pipeline completed successfully! Total elapsed: {_total:.2f}s ===\n")
 
 if __name__=="__main__":
     run_pipeline()

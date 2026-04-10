@@ -1,5 +1,5 @@
 from pyspark.sql.types import *
-from pyspark.sql.functions import col, to_date, window
+from pyspark.sql.functions import col, to_date, to_timestamp, window
 
 def ingest_event_data(spark, data_files):
     '''
@@ -96,7 +96,7 @@ def clean_event_data(df):
 
     print("Cleaning ingested data...")
     clean_df = df \
-    .withColumn("event_date", to_date(col("SQLDATE").cast("string"), "yyyyMMdd")) \
+    .withColumn("event_date", to_timestamp(col("SQLDATE").cast("string"), "yyyyMMdd")) \
     .withColumn("year_month", col("MonthYear").cast("string")) \
     .withColumn("goldstein_scale", col("GoldsteinScale").cast("float")) \
     .withColumn("avg_tone", col("AvgTone").cast("float")) \
@@ -104,7 +104,7 @@ def clean_event_data(df):
     .withColumn("num_articles", col("NumArticles").cast("int")) \
     .withColumn("num_sources", col("NumSources").cast("int")) \
     .withColumn("is_root_event", col("IsRootEvent").cast("boolean")) \
-    .withColumn("date_added", to_date(col("DATEADDED").cast("string").substr(1,8), "yyyyMMdd")) \
+    .withColumn("date_added", to_timestamp(col("DATEADDED").cast("string").substr(1,8), "yyyyMMdd")) \
     .withColumn("lon", col("ActionGeo_Long")) \
     .withColumn("lat", col("ActionGeo_Lat")) \
     .select(

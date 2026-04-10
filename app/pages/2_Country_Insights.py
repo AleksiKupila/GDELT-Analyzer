@@ -1,7 +1,10 @@
+import time as _time
 import streamlit as st
 from datetime import datetime, timedelta
 
 from core.queries import get_user_queried_events
+
+_PAGE_START = _time.perf_counter()
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -62,7 +65,7 @@ with st.form("event_query_form"):
     with col_date1:
         date_min = st.datetime_input(
             "From date",
-            value=datetime.now() - timedelta(hours=48),
+            value=datetime(year=2026, month=4, day=5, hour=23,minute=0),
             help="Start of the event date window.",
         )
     with col_date2:
@@ -218,3 +221,11 @@ if submitted:
             file_name="gdelt_events.csv",
             mime="text/csv",
         )
+
+# ── Page load timer ───────────────────────────────────────────────────────────
+_elapsed = _time.perf_counter() - _PAGE_START
+st.markdown(
+    f"<p style='text-align:right;color:#4A5068;font-size:0.75rem;margin-top:2rem;'>"
+    f"⏱ Page rendered in {_elapsed:.2f} s</p>",
+    unsafe_allow_html=True,
+)

@@ -187,8 +187,8 @@ def get_country_event_spikes(only_spikes: bool = False, limit: int = 50) -> pd.D
                 "ActionGeo_CountryCode": 1,
                 "spike_events": 1,
                 "baseline_events": 1,
-                "hourly_baseline_rate": 1,
-                "expected_spike_events": 1,
+                "baseline_days_count": 1,
+                "avg_baseline_per_day": 1,
                 "spike_score": 1,
                 "is_spike": 1,
             }

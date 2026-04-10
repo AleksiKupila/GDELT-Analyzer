@@ -1,6 +1,9 @@
+import time as _time
 import streamlit as st
 
 from core.queries import get_country_event_spikes
+
+_PAGE_START = _time.perf_counter()
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -24,7 +27,7 @@ st.markdown(
 st.markdown("# 📈 Event Spike Detection")
 st.markdown(
     "Identify countries with **abnormally high event volumes** by comparing "
-    "recent 24-hour activity against a rolling 6-day hourly baseline."
+    "the **latest day's** event count against the average of the preceding 6 days."
 )
 st.markdown("---")
 
@@ -34,12 +37,12 @@ with st.expander("ℹ️  Column reference"):
         """
         | Column | Meaning |
         |---|---|
-        | `spike_events` | Raw events recorded in the spike window (last 24 h) |
-        | `baseline_events` | Total events recorded in the 6-day baseline window |
-        | `hourly_baseline_rate` | Average events per hour during the baseline |
-        | `expected_spike_events` | Events expected in the spike window at the baseline rate |
-        | `spike_score` | Relative excess: `(actual − expected) / expected` |
-        | `is_spike` | `True` when `spike_score > 0.5` (> 50 % above baseline) |
+        | `spike_events` | Raw event count on the most recent day bucket |
+        | `baseline_events` | Total events across the preceding baseline days |
+        | `baseline_days_count` | Number of baseline day buckets present for this country |
+        | `avg_baseline_per_day` | Average events per day during the baseline |
+        | `spike_score` | Relative excess: `(spike_events − avg_baseline_per_day) / avg_baseline_per_day` |
+        | `is_spike` | `True` when `spike_score > 0.5` (> 50 % above daily baseline average) |
         """
     )
 
@@ -106,17 +109,16 @@ if load_btn:
         st.markdown("### Flagged countries")
 
         FLAGGED_COLS = [
-            "ActionGeo_CountryCode", "spike_events", "expected_spike_events",
-            "spike_score", "hourly_baseline_rate", "baseline_events",
+            "ActionGeo_CountryCode", "spike_events", "avg_baseline_per_day",
+            "spike_score", "baseline_events", "baseline_days_count",
         ]
         available_flagged = [c for c in FLAGGED_COLS if c in flagged.columns]
 
         st.dataframe(
             flagged[available_flagged].style.format(
                 {
-                    "spike_score":            "{:.2%}",
-                    "hourly_baseline_rate":   "{:.2f}",
-                    "expected_spike_events":  "{:.1f}",
+                    "spike_score":          "{:.2%}",
+                    "avg_baseline_per_day": "{:.1f}",
                 },
                 na_rep="—",
             ),
@@ -128,17 +130,16 @@ if load_btn:
     st.markdown("### All countries by spike score")
 
     ALL_COLS = [
-        "ActionGeo_CountryCode", "spike_events", "expected_spike_events",
-        "spike_score", "hourly_baseline_rate", "baseline_events", "is_spike",
+        "ActionGeo_CountryCode", "spike_events", "avg_baseline_per_day",
+        "spike_score", "baseline_events", "baseline_days_count", "is_spike",
     ]
     available_all = [c for c in ALL_COLS if c in spike_df.columns]
 
     st.dataframe(
         spike_df[available_all].style.format(
             {
-                "spike_score":            "{:.2%}",
-                "hourly_baseline_rate":   "{:.2f}",
-                "expected_spike_events":  "{:.1f}",
+                "spike_score":          "{:.2%}",
+                "avg_baseline_per_day": "{:.1f}",
             },
             na_rep="—",
         ),
@@ -171,3 +172,11 @@ if load_btn:
         file_name="gdelt_spikes.csv",
         mime="text/csv"
     )
+
+# ── Page load timer ───────────────────────────────────────────────────────────
+_elapsed = _time.perf_counter() - _PAGE_START
+st.markdown(
+    f"<p style='text-align:right;color:#4A5068;font-size:0.75rem;margin-top:2rem;'>"
+    f"⏱ Page rendered in {_elapsed:.2f} s</p>",
+    unsafe_allow_html=True,
+)

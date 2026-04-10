@@ -1,4 +1,7 @@
+import time as _time
 import streamlit as st
+
+_PAGE_START = _time.perf_counter()
 
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -143,3 +146,11 @@ st.markdown(
 )
 
 st.caption("GDELT Analyzer — University project · Data © The GDELT Project")
+
+# ── Page load timer ───────────────────────────────────────────────────────────
+_elapsed = _time.perf_counter() - _PAGE_START
+st.markdown(
+    f"<p style='text-align:right;color:#4A5068;font-size:0.75rem;margin-top:1rem;'>"
+    f"⏱ Page rendered in {_elapsed:.2f} s</p>",
+    unsafe_allow_html=True,
+)

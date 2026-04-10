@@ -1,3 +1,4 @@
+import time as _time
 import streamlit as st
 import pydeck as pdk
 import pandas as pd
@@ -5,6 +6,8 @@ from datetime import datetime, timedelta
 
 from core.queries import get_ui_data, get_tone_extremes, get_top_events
 from core.mongo_utils import get_mongodb_client
+
+_PAGE_START = _time.perf_counter()
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -184,3 +187,11 @@ if not pos_events.empty or not neg_events.empty:
         st.dataframe(pos_events, width='stretch', hide_index=True)
         st.write("**Most negative**")
         st.dataframe(neg_events, width='stretch', hide_index=True)
+
+# ── Page load timer ───────────────────────────────────────────────────────────
+_elapsed = _time.perf_counter() - _PAGE_START
+st.markdown(
+    f"<p style='text-align:right;color:#4A5068;font-size:0.75rem;margin-top:2rem;'>"
+    f"⏱ Page rendered in {_elapsed:.2f} s</p>",
+    unsafe_allow_html=True,
+)

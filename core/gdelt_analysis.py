@@ -50,7 +50,7 @@ def separate_events(df):
 
     write_data(result, "separate_events")
 
-          
+     
 def impactful_events(df):
     result = df.withColumn(
         "impact_score",
@@ -98,77 +98,139 @@ def tone_by_country(df):
     write_data(result, "tone_by_country")
 
 
-
-def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spike_hours=24, spike_threshold=0.5):
+def country_event_spike(df, timestamp_col="event_date", baseline_days=12, spike_threshold=0.5):
     """
     Detects countries experiencing an unusual spike in event activity.
-    Works best with longer baselines, such as 144h/6 days.
 
+    Since GDELT data is bucketed into daily timestamps and files are released
+    every 15 minutes, the **latest day bucket is always partially filled**
+    (only a few hours of events so far). To avoid comparing a full baseline day
+    against an incomplete current day, the function skips the latest bucket
+    and uses the **second-most-recent** bucket as the spike period:
 
+      Global day buckets ranked newest → oldest:
+        rank 1  — latest (partial/still-accumulating)  → SKIPPED
+        rank 2  — most recently completed day           → SPIKE period
+        rank 3…(2+baseline_days) — preceding days      → BASELINE period
+
+    For every country the function computes:
+
+    - ``spike_events``        — event count on the most recently completed day.
+    - ``baseline_events``     — total events across ``baseline_days`` preceding days.
+    - ``baseline_days_count`` — baseline day buckets actually present for that
+                                country (may be < baseline_days for sparse data).
+    - ``avg_baseline_per_day``— baseline_events / baseline_days_count.
+    - ``spike_score``         — relative deviation from the daily average:
+          spike_score = (spike_events - avg_baseline_per_day) / avg_baseline_per_day
+
+      0 = normal activity; 1.0 = twice the daily average; negative = quieter.
+      When baseline is zero but the spike day has events, spike_events is used
+      directly so brand-new activity in previously quiet countries is surfaced.
+
+    - ``is_spike`` — True when spike_score > spike_threshold (default 0.5).
+
+    Parameters
+    ----------
+    df : pyspark.sql.DataFrame
+        Raw or enriched GDELT event DataFrame containing at least
+        ``ActionGeo_CountryCode`` and the column named by ``timestamp_col``.
+    timestamp_col : str
+        Name of the date/timestamp column.  Defaults to ``"event_date"``.
+    baseline_days : int
+        Number of completed day buckets to use as the baseline.
+        Defaults to 6 (six full days preceding the spike day).
+    spike_threshold : float
+        Minimum spike_score required to set ``is_spike = True``.
+        Defaults to 0.5.
+
+    Returns
+    -------
+    None  (writes directly to the ``country_event_spike`` MongoDB collection)
     """
-    events_by_time = (
+
+    # ------------------------------------------------------------------
+    # 1. Count raw events per (country, day bucket)
+    # ------------------------------------------------------------------
+    events_by_day = (
         df
         .filter(col("ActionGeo_CountryCode").isNotNull())
         .groupBy("ActionGeo_CountryCode", timestamp_col)
         .agg(count("*").alias("total_events"))
-        .withColumn("event_ts", to_timestamp(col(timestamp_col)))
+        .withColumn("event_ts", col(timestamp_col).cast("timestamp"))
         .filter(col("event_ts").isNotNull())
     )
 
-    # Get latest global timestamp (newest event)
-    latest_ts = events_by_time.agg(max("event_ts").alias("global_latest_ts")).first()["global_latest_ts"]
+    # ------------------------------------------------------------------
+    # 2. Rank all distinct global day buckets newest → oldest.
+    #    rank 1 = latest (partially accumulated, skip)
+    #    rank 2 = spike day (most recently *completed* day)
+    #    rank 3…(2+baseline_days) = baseline days
+    # ------------------------------------------------------------------
+    day_rank_window = Window.orderBy(col("event_ts").desc())
+    global_day_ranks = (
+        events_by_day
+        .select("event_ts")
+        .distinct()
+        .withColumn("day_rank", dense_rank().over(day_rank_window))
+    )
+    print("Global day bucket ranks (newest first):")
+    global_day_ranks.orderBy("day_rank").show(10, truncate=False)
 
-    # Calculate how far the event is from the newest event
-    # Then label the event to be in spike or baseline period depending on its age
+    # Join the rank back onto per-(country, day) rows
+    events_ranked = events_by_day.join(global_day_ranks, on="event_ts", how="left")
+
+    # ------------------------------------------------------------------
+    # 3. Label rows by window membership using the rank
+    # ------------------------------------------------------------------
     labelled = (
-        events_by_time
-        .withColumn(
-            "hours_from_latest",
-            (unix_timestamp(lit(latest_ts)) - unix_timestamp("event_ts")) / lit(3600.0)
-        )
+        events_ranked
         .withColumn(
             "is_spike_period",
-            (col("hours_from_latest") >= 0) & (col("hours_from_latest") < lit(float(spike_hours)))
+            col("day_rank") == lit(2)
         )
         .withColumn(
             "is_baseline_period",
-            (col("hours_from_latest") >= lit(float(spike_hours))) & (col("hours_from_latest") <= lit(float(spike_hours + baseline_hours)))
+            (col("day_rank") >= lit(3)) & (col("day_rank") <= lit(2 + baseline_days))
         )
     )
 
-    # Group by country and calculate total events that happened at the same time
+    # ------------------------------------------------------------------
+    # 4. Aggregate per country: spike day total and baseline totals
+    # ------------------------------------------------------------------
     aggregated = (
         labelled
         .groupBy("ActionGeo_CountryCode")
         .agg(
             sum(when(col("is_spike_period"),    col("total_events")).otherwise(lit(0))).alias("spike_events"),
             sum(when(col("is_baseline_period"), col("total_events")).otherwise(lit(0))).alias("baseline_events"),
+            sum(when(col("is_baseline_period"), lit(1)).otherwise(lit(0))).alias("baseline_days_count"),
         )
     )
 
-    # Calculate baseline (the average events/hour)
-    # Then Calculate what is expected for the spike period to be 'normal' amount of events
+    # ------------------------------------------------------------------
+    # 5. Compute per-day baseline average and spike score
+    # ------------------------------------------------------------------
     with_expected = (
         aggregated
         .withColumn(
-            "hourly_baseline_rate",
-            spark_round(col("baseline_events") / lit(float(baseline_hours)), 4)
-        )
-        .withColumn(
-            "expected_spike_events",
-            spark_round(col("hourly_baseline_rate") * lit(float(spike_hours)), 4)
+            "avg_baseline_per_day",
+            spark_round(
+                when(col("baseline_days_count") > 0,
+                     col("baseline_events") / col("baseline_days_count").cast("double"))
+                .otherwise(lit(0.0)),
+                4
+            )
         )
     )
 
-    # Calculate score based on expected vs actual spike events
     scored = (
         with_expected
         .withColumn(
             "spike_score",
             when(
-                col("expected_spike_events") > 0,
+                col("avg_baseline_per_day") > 0,
                 spark_round(
-                    (col("spike_events") - col("expected_spike_events")) / col("expected_spike_events"),
+                    (col("spike_events") - col("avg_baseline_per_day")) / col("avg_baseline_per_day"),
                     4
                 )
             ).otherwise(
@@ -177,7 +239,7 @@ def country_event_spike(df, timestamp_col="event_date", baseline_hours=144, spik
             )
         )
         .withColumn("is_spike", col("spike_score") > lit(spike_threshold))
-        .filter("baseline_events > 200")
+        .filter("avg_baseline_per_day > 200")
         .orderBy(col("spike_score").desc())
     )
 
@@ -195,12 +257,29 @@ def run_analysis(df_with_code_descriptions):
         events_by_country(cached_df)
 
         # DF that separates events by location and topic
-        separate_events(cached_df)
+        # separate_events(cached_df)
 
         # Average_tone by country
         tone_by_country(cached_df)
 
         country_event_spike(cached_df)
+
+        # TESTING
+        events_by_time_and_country(cached_df)
         
     finally:
         cached_df.unpersist()
+
+# TESTING
+def events_by_time_and_country(df):
+    events_by_time = (
+        df
+        .filter(col("ActionGeo_CountryCode").isNotNull())
+        .groupBy("ActionGeo_CountryCode", "event_date")
+        .agg(count("*").alias("total_events"))
+        .withColumn("event_ts", to_timestamp(col("event_date")))
+        .filter(col("event_ts").isNotNull())
+        .orderBy(col("event_ts").desc())
+    )
+
+    write_data(events_by_time, "events_by_time_and_country")
