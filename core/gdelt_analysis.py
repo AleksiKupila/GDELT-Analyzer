@@ -49,7 +49,7 @@ def tone_by_country(df):
     write_data(result, "tone_by_country")
 
 
-def country_event_spike(df, timestamp_col="event_date", baseline_days=12, spike_threshold=0.5):
+def country_event_spike(df, timestamp_col="event_date", baseline_days=5, spike_threshold=0.5):
     """
     Detects countries experiencing an unusual spike in event activity.
 
@@ -159,7 +159,7 @@ def country_event_spike(df, timestamp_col="event_date", baseline_days=12, spike_
     write_data(scored, "country_event_spike")
 
 
-def run_analysis(df_with_code_descriptions):
+def run_analysis(df_with_code_descriptions, time_limit):
 
     cached_df = df_with_code_descriptions.persist(StorageLevel.DISK_ONLY)
     try:
@@ -175,7 +175,8 @@ def run_analysis(df_with_code_descriptions):
         # Average_tone by country
         tone_by_country(cached_df)
 
-        country_event_spike(cached_df)
+        # Detection of spikes in events in different countries
+        country_event_spike(cached_df, baseline_days=time_limit/24)
 
         # TESTING
         # events_by_time_and_country(cached_df)

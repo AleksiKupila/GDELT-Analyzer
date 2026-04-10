@@ -39,7 +39,7 @@ def fetch_new_data(spark, time_limit):
 
     return clean_df, event_codes
 
-def run_pipeline(time_limit=1, clear=False, download=False, analyze=False, index=False):
+def run_pipeline(time_limit=168, clear=False, download=False, analyze=False, index=False):
 
     _pipeline_start = time.perf_counter()
     print("\n=== Pipeline started ===")
@@ -126,7 +126,7 @@ def run_pipeline(time_limit=1, clear=False, download=False, analyze=False, index
         print(f"[timer] Analysis DataFrame preparation: {time.perf_counter() - _t:.2f}s")
 
         _t = time.perf_counter()
-        run_analysis(analysis_df)
+        run_analysis(analysis_df, time_limit)
         print(f"[timer] run_analysis (all sub-tasks): {time.perf_counter() - _t:.2f}s")
 
     # ── Index setup ───────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--clear', action='store_true', default=False, help="Clear old files from the DB")
     parser.add_argument("-a", '--analyze', action='store_true', default=False, help="Perform analysis on downloaded data")
     parser.add_argument('-u', '--ui', action='store_true', default=False, help="Launch the UI")
-    parser.add_argument('-H', '--hours', type=int, default=8, help="Time window in hours to download files from")
+    parser.add_argument('-H', '--hours', type=int, default=168, help="Time window in hours to download files from. Event spike detection needs 168 hours / 7 days at minimum to work reliably.")
     parser.add_argument('-i', '--indexes', action="store_true", default=False, help="Create compound indexes for most queried fields")
    
     args = parser.parse_args()
