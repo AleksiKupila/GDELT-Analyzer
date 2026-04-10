@@ -93,6 +93,7 @@ def tone_by_country(df):
             avg("avg_tone").alias("Average_Tone"),
             mode("ActionGeo_FullName").alias("Country_Name")
         ).select("Country_Name", "Average_Tone") \
+        .filter(col("Country_Name").isNotNull()) \
         .orderBy(col("Average_Tone").desc())
 
     write_data(result, "tone_by_country")
