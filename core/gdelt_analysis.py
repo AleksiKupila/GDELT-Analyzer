@@ -7,56 +7,6 @@ from pyspark.sql.window import Window
 def join_cameo_df(cameo_df, event_df):
     return event_df.join(cameo_df, on="EventCode", how="inner")
 
-def separate_events(df):
-    '''
-    Function that attempts to group events by country, date, quad class and event codes.
-    Includes sample URLs for each event for later AI analysis.
-    '''
-    url_window = Window.partitionBy(
-        "ActionGeo_CountryCode", "event_date", "QuadClass", "EventBaseCode"
-    ).orderBy(col("num_mentions").desc())
-
-    ranked = df \
-        .filter(col("ActionGeo_CountryCode").isNotNull()) \
-        .withColumn("url_rank", row_number().over(url_window))
-
-    # Collect up to 20 top URLs per group using a conditional collect_list on pre-ranked rows
-    result = ranked \
-        .groupBy(
-            "ActionGeo_CountryCode",
-            "event_date",
-            "QuadClass",
-            "EventBaseCode"
-        ).agg(
-            count("*").alias("total_events"),
-            sum("num_mentions").alias("total_mentions"),
-            sum("num_articles").alias("total_articles"),
-            sum("num_sources").alias("total_sources"),
-            avg("avg_tone").alias("average_tone"),
-            avg("goldstein_scale").alias("avg_goldstein_scale"),
-            mode("ActionGeo_FullName").alias("top_location"),
-            mode("Actor1Name").alias("top_actor_1_name"),
-            mode("Actor2Name").alias("top_actor_2_name"),
-            mode("lon"),
-            mode("lat"),
-            mode("EventDescription").alias("top_event_description"),
-            # Only collect SOURCEURL for the top-20 ranked rows — avoids a
-            # full collect_list + in-memory sort on every group
-            collect_list(
-                when(col("url_rank") <= 20, col("SOURCEURL"))
-            ).alias("sample_urls")
-        ).filter("total_sources > 20") \
-        .orderBy(col("total_articles").desc())
-
-    write_data(result, "separate_events")
-
-     
-def impactful_events(df):
-    result = df.withColumn(
-        "impact_score",
-        col("avg_goldstein_scale") * col("total_articles")) \
-        .orderBy(col("impact_score").asc())
-    write_data(result, "top_impact_events")
 
 def top_events(df):
     '''
@@ -109,44 +59,6 @@ def country_event_spike(df, timestamp_col="event_date", baseline_days=12, spike_
     against an incomplete current day, the function skips the latest bucket
     and uses the **second-most-recent** bucket as the spike period:
 
-      Global day buckets ranked newest → oldest:
-        rank 1  — latest (partial/still-accumulating)  → SKIPPED
-        rank 2  — most recently completed day           → SPIKE period
-        rank 3…(2+baseline_days) — preceding days      → BASELINE period
-
-    For every country the function computes:
-
-    - ``spike_events``        — event count on the most recently completed day.
-    - ``baseline_events``     — total events across ``baseline_days`` preceding days.
-    - ``baseline_days_count`` — baseline day buckets actually present for that
-                                country (may be < baseline_days for sparse data).
-    - ``avg_baseline_per_day``— baseline_events / baseline_days_count.
-    - ``spike_score``         — relative deviation from the daily average:
-          spike_score = (spike_events - avg_baseline_per_day) / avg_baseline_per_day
-
-      0 = normal activity; 1.0 = twice the daily average; negative = quieter.
-      When baseline is zero but the spike day has events, spike_events is used
-      directly so brand-new activity in previously quiet countries is surfaced.
-
-    - ``is_spike`` — True when spike_score > spike_threshold (default 0.5).
-
-    Parameters
-    ----------
-    df : pyspark.sql.DataFrame
-        Raw or enriched GDELT event DataFrame containing at least
-        ``ActionGeo_CountryCode`` and the column named by ``timestamp_col``.
-    timestamp_col : str
-        Name of the date/timestamp column.  Defaults to ``"event_date"``.
-    baseline_days : int
-        Number of completed day buckets to use as the baseline.
-        Defaults to 6 (six full days preceding the spike day).
-    spike_threshold : float
-        Minimum spike_score required to set ``is_spike = True``.
-        Defaults to 0.5.
-
-    Returns
-    -------
-    None  (writes directly to the ``country_event_spike`` MongoDB collection)
     """
 
     # ------------------------------------------------------------------
@@ -266,12 +178,12 @@ def run_analysis(df_with_code_descriptions):
         country_event_spike(cached_df)
 
         # TESTING
-        events_by_time_and_country(cached_df)
+        # events_by_time_and_country(cached_df)
         
     finally:
         cached_df.unpersist()
 
-# TESTING
+# TESTING / UNUSED
 def events_by_time_and_country(df):
     events_by_time = (
         df
@@ -284,3 +196,54 @@ def events_by_time_and_country(df):
     )
 
     write_data(events_by_time, "events_by_time_and_country")
+
+def separate_events(df):
+    '''
+    Function that attempts to group events by country, date, quad class and event codes.
+    Includes sample URLs for each event for later AI analysis.
+    '''
+    url_window = Window.partitionBy(
+        "ActionGeo_CountryCode", "event_date", "QuadClass", "EventBaseCode"
+    ).orderBy(col("num_mentions").desc())
+
+    ranked = df \
+        .filter(col("ActionGeo_CountryCode").isNotNull()) \
+        .withColumn("url_rank", row_number().over(url_window))
+
+    # Collect up to 20 top URLs per group using a conditional collect_list on pre-ranked rows
+    result = ranked \
+        .groupBy(
+            "ActionGeo_CountryCode",
+            "event_date",
+            "QuadClass",
+            "EventBaseCode"
+        ).agg(
+            count("*").alias("total_events"),
+            sum("num_mentions").alias("total_mentions"),
+            sum("num_articles").alias("total_articles"),
+            sum("num_sources").alias("total_sources"),
+            avg("avg_tone").alias("average_tone"),
+            avg("goldstein_scale").alias("avg_goldstein_scale"),
+            mode("ActionGeo_FullName").alias("top_location"),
+            mode("Actor1Name").alias("top_actor_1_name"),
+            mode("Actor2Name").alias("top_actor_2_name"),
+            mode("lon"),
+            mode("lat"),
+            mode("EventDescription").alias("top_event_description"),
+            # Only collect SOURCEURL for the top-20 ranked rows — avoids a
+            # full collect_list + in-memory sort on every group
+            collect_list(
+                when(col("url_rank") <= 20, col("SOURCEURL"))
+            ).alias("sample_urls")
+        ).filter("total_sources > 20") \
+        .orderBy(col("total_articles").desc())
+
+    write_data(result, "separate_events")
+
+     
+def impactful_events(df):
+    result = df.withColumn(
+        "impact_score",
+        col("avg_goldstein_scale") * col("total_articles")) \
+        .orderBy(col("impact_score").asc())
+    write_data(result, "top_impact_events")
