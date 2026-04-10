@@ -58,7 +58,11 @@ source venv/bin/activate       # Linux / macOS
 **3. Install dependencies**
 
 ```bash
-pip install pyspark pymongo streamlit
+# install project dependencies from requirements.txt
+pip install -r requirements.txt
+```
+
+If your virtual environment is active, these packages are installed only inside `venv`.
 ```
 
 ## Usage
