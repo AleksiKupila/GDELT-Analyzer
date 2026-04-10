@@ -63,7 +63,7 @@ pip install -r requirements.txt
 ```
 
 If your virtual environment is active, these packages are installed only inside `venv`.
-```
+
 
 ## Usage
 
@@ -78,7 +78,7 @@ All functionality is accessed through `run.py`. Flags can be combined freely.
 | `-H` / `--hours` | Time window in hours to fetch data from (default: 168 hours/7 days) NOTE: the spike detection is most reliable when working with full days (divisible by 24) and windows longer than 7 days.|
 | `-i` / `--indexes` | Create compound indexes on MongoDB collections |
 
-**Download and analyze data, then launch the UI:**
+**Download, analyze data, and launch the UI:**
 
 ```bash
 python run.py -g -a -u
