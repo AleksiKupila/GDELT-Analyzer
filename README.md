@@ -71,7 +71,7 @@ All functionality is accessed through `run.py`. Flags can be combined freely.
 | `-a` / `--analyze` | Run Spark analysis on stored data |
 | `-u` / `--ui` | Launch the Streamlit dashboard |
 | `-c` / `--clear` | Clear existing data and collections before running |
-| `-H` / `--hours` | Time window in hours to fetch data from (default: 168 hours/7 days) |
+| `-H` / `--hours` | Time window in hours to fetch data from (default: 168 hours/7 days) NOTE: the spike detection is most reliable when working with full days (divisible by 24) and windows longer than 7 days.|
 | `-i` / `--indexes` | Create compound indexes on MongoDB collections |
 
 **Download and analyze data, then launch the UI:**
@@ -86,10 +86,10 @@ python run.py -g -a -u
 python run.py -a -u
 ```
 
-**Full refresh (clear old data, download 200 hours, analyze, index, and launch UI):**
+**Full refresh (clear old data, download 336 hours, analyze, index, and launch UI):**
 
 ```bash
-python run.py -c -g -a -i -u -H 200
+python run.py -c -g -a -i -u -H 336
 ```
 
 ## Dashboard Pages
