@@ -1,6 +1,6 @@
 # GDELT-Analyzer
 
-A data pipeline and analytics dashboard that ingests event data from the [GDELT Project](https://www.gdeltproject.org/), processes it with Apache Spark, stores results in MongoDB, and surfaces insights through an interactive Streamlit dashboard. This is a university project.
+A data pipeline and analytics dashboard that ingests event data from the [GDELT Project](https://www.gdeltproject.org/), processes it with Apache Spark, stores results in MongoDB, and surfaces insights through an interactive Streamlit dashboard. This is a university project focused on big data analysis.
 
 ## Stack
 
